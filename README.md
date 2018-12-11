@@ -1,4 +1,4 @@
-# Attentional	Neural Machine	Transla%on
+# Attentional	Neural Machine	Translation
 ## Scope
 Standard attentional-based NMT framework (Bahdanau et al. 2014)
 - Data Preparer
