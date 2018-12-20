@@ -6,9 +6,10 @@ import random
 from LanguageModel import LanguageTokens
 
 class seq2seq():
-    def __init__(self, input_size, hidden_size, output_size, device = None, learning_rate = 0.01, rnn_type = 'lstm', bidirectional = False, attention = False, max_length = 40, teacher_forcing_ratio = 0.5):
+    def __init__(self, input_size, hidden_size, output_size, device = None, learning_rate = 0.01, rnn_type = 'lstm', bidirectional = False, attention = False, max_length = 50, beam_width = 1, teacher_forcing_ratio = 0.5):
         self.device = device
         self.max_length = max_length
+        self.beam_width = beam_width
         self.attention = attention
         self.teacher_forcing_ratio = teacher_forcing_ratio
         self.encoder = EncoderRNN(input_size, hidden_size, rnn_type = rnn_type, bidirectional = bidirectional, device = device).to(device)
@@ -43,7 +44,7 @@ class seq2seq():
 
         output_sentence = []
 
-        for di in range(target_length):
+        for i in range(target_length):
             if self.attention:
                 decoder_output, decoder_hidden, decoder_attention = self.decoder(
                     decoder_input, decoder_hidden, encoder_outputs)
@@ -53,11 +54,11 @@ class seq2seq():
             output_sentence.append(topi.item())
 
             if use_teacher_forcing: # Teacher forcing: Feed the target as the next input
-                decoder_input = target_tensor[di]  # Teacher forcing
+                decoder_input = target_tensor[i]  # Teacher forcing
             else: # Without teacher forcing: use its own predictions as the next input
                 decoder_input = topi.squeeze().detach()  # detach from history as input
-            #print("Training", di, criterion(decoder_output, target_tensor[di]))
-            loss += self.criterion(decoder_output, target_tensor[di])
+                
+            loss += self.criterion(decoder_output, target_tensor[i])
 
             if decoder_input.item() == LanguageTokens.EOS:
                 break
@@ -79,7 +80,7 @@ class seq2seq():
             if self.attention:
                 encoder_outputs = torch.zeros(self.max_length, self.encoder.hidden_size * (2 if self.encoder.bidirectional else 1), device=self.device)
 
-            for i in range(min(input_length, self.max_length)):
+            for i in range(input_length):
                 encoder_output, encoder_hidden = self.encoder(input_tensor[i], encoder_hidden)
                 if self.attention:
                     encoder_outputs[i] = encoder_output[0, 0]
@@ -87,63 +88,52 @@ class seq2seq():
             decoder_input = torch.tensor([[LanguageTokens.SOS]], device=self.device)
 
             decoder_hidden = self.decoder.getDecoderHidden(encoder_hidden)
+            
+            sequence, decoder_outputs = self.predict(input_tensor = input_tensor)
+            
+            loss = sum([self.criterion(decoder_outputs[i], target_tensor[i]) for i in range(min(len(decoder_outputs),target_length))])
 
-            output_sentence = []        
-            loss = 0
-
-            for di in range(target_length):
-                if self.attention:
-                    decoder_output, decoder_hidden, decoder_attention = self.decoder(
-                        decoder_input, decoder_hidden, encoder_outputs)
-                else:
-                    decoder_output, decoder_hidden = self.decoder(decoder_input, decoder_hidden)
-                topv, topi = decoder_output.data.topk(1)
-                output_sentence.append(topi.item())
-
-                loss += self.criterion(decoder_output, target_tensor[di])
-
-                if topi.item() == LanguageTokens.EOS:
-                    break
-
-                decoder_input = topi.squeeze().detach()
-
-            return loss.item(), torch.Tensor([output_sentence])
-        
+            return loss.item(), torch.Tensor([sequence])
+                    
     def predict(self, input_tensor):
         with torch.no_grad():
             input_length = input_tensor.size()[0]
-            encoder_hidden = self.encoder.initHidden()
-            
+            encoder_hidden = self.encoder.initEncoderHidden()
+
             if self.attention:
                 encoder_outputs = torch.zeros(self.max_length, self.encoder.hidden_size * (2 if self.encoder.bidirectional else 1), device=self.device)
 
             for i in range(input_length):
-                encoder_output, encoder_hidden = self.encoder(input_tensor[i],
-                                                         encoder_hidden)
+                encoder_output, encoder_hidden = self.encoder(input_tensor[i], encoder_hidden)
+                
                 if self.attention:
                     encoder_outputs[i] = encoder_output[0, 0]
 
-            decoder_input = torch.tensor([[LanguageTokens.SOS]], devicef=self.device)  # SOS
+            sequences = [(0.0, [torch.tensor([[LanguageTokens.SOS]], device=self.device)], [], self.decoder.getDecoderHidden(encoder_hidden))]
+            
+            for l in range(self.max_length):
+                beam_expansion = []
+                for apriori_log_prob, sentence, decoder_outputs, decoder_hidden in sequences:
+                    decoder_input = sentence[-1]
+                    if(decoder_input.item() != LanguageTokens.EOS):
+                        if self.attention:
+                            decoder_output, decoder_hidden, _ = self.decoder(decoder_input, decoder_hidden,encoder_outputs)
+                        else:
+                            decoder_output, decoder_hidden = self.decoder(decoder_input, decoder_hidden)
 
-            decoder_hidden = encoder_hidden
+                        log_probabilities, indexes = decoder_output.data.topk(self.beam_width)
+                        
+                        for i in range(len(log_probabilities)):
+                            log_prob = log_probabilities[i]
+                            index = indexes.squeeze()[i] # (1,)
+                            index = index.view(1,-1) # (1,1)
+                            beam_expansion.append((apriori_log_prob + log_prob, sentence + [index], decoder_outputs + [decoder_output], decoder_hidden))
+                    else:
+                        beam_expansion.append((apriori_log_prob, sentence, decoder_outputs, decoder_hidden))
 
-            output_sentence = []        
-
-            for di in range(self.max_length):
-                if self.attention:
-                    decoder_output, decoder_hidden, decoder_attention = self.decoder(
-                        decoder_input, decoder_hidden, encoder_outputs)
-                else:
-                    decoder_output, decoder_hidden = self.decoder(decoder_input, decoder_hidden)
-                topv, topi = decoder_output.data.topk(1)
-                output_sentence.append(topi.item())
-
-                if topi.item() == LanguageTokens.EOS:
-                    break
-
-                decoder_input = topi.squeeze().detach()
-
-            return decoded_words, torch.Tensor([output_sentence])
+                sequences = sorted(beam_expansion, reverse=True, key = lambda x: x[0])[:self.beam_width]
+                
+            return sequences[0][1], sequences[0][2] # 0 best sequence, 1 sentence, 2 decoder_outputs
 
 class EncoderRNN(nn.Module):
     # input_size: Größe des Vokabulars (One-Hot-Encoding)
@@ -195,8 +185,8 @@ class DecoderRNN(nn.Module):
         self.embedding = nn.Embedding(output_size, hidden_size)
         
         if self.attention:
-            self.attn = nn.Linear(self.hidden_size * 2, self.max_length) # attn(embedded[0], hidden[0])
-            self.attn_combine = nn.Linear(self.hidden_size * 2, self.hidden_size)
+            self.attention_weights_linear = nn.Linear(self.hidden_size * 2, self.max_length) # attention_weights_linear(embedded[0], hidden[0])
+            self.attention_combine_linear = nn.Linear(self.hidden_size * 2, self.hidden_size)
             
         self.dropout = nn.Dropout(self.dropout_p)
 
@@ -214,19 +204,19 @@ class DecoderRNN(nn.Module):
     
         if self.attention:
             if self.rnn_type == 'lstm':
-                attn_weights = F.softmax(self.attn(torch.cat((output[0], hidden[0][0]), 1)), dim = 1)
+                attention_weights = F.softmax(self.attention_weights_linear(torch.cat((output[0], hidden[0][0]), 1)), dim = 1)
             elif self.rnn_type == 'gru':
-                attn_weights = F.softmax(self.attn(torch.cat((output[0], hidden[0]), 1)), dim = 1)
-            attn_applied = torch.bmm(attn_weights.unsqueeze(0), encoder_outputs.unsqueeze(0))
-            output = torch.cat((output[0], attn_applied[0]), 1)
-            output = self.attn_combine(output).unsqueeze(0)
+                attention_weights = F.softmax(self.attention_weights_linear(torch.cat((output[0], hidden[0]), 1)), dim = 1)
+            attention_weighted_input = torch.bmm(attention_weights.unsqueeze(0), encoder_outputs.unsqueeze(0))
+            output = torch.cat((output[0], attention_weighted_input[0]), 1)
+            output = self.attention_combine_linear(output).unsqueeze(0)
         
         output = F.relu(output)
         output, hidden = self.rnn(output, hidden)
         output = F.log_softmax(self.out(output[0]), dim = 1)
         
         if self.attention:
-            return output, hidden, attn_weights
+            return output, hidden, attention_weights
         return output, hidden
 
     def initHidden(self):

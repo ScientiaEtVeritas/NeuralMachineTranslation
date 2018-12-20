@@ -2,9 +2,10 @@ from LanguageModel import LanguageTokens, LanguageModel
 import torch
 
 class DataLoader:
-    def __init__(self, dataset, languages, languageModels = None, device = None):
+    def __init__(self, dataset, languages, max_length = 50, languageModels = None, device = None):
         self.dataset = dataset
         self.languages = languages
+        self.max_length = max_length
         self.loadFiles()
         if languageModels is not None:
             self.languageModels = languageModels
@@ -24,7 +25,7 @@ class DataLoader:
         return open(f'data/{self.dataset}.{l}', encoding='utf-8').read()
         
     def _preprocess(self, data):
-        return [line.split(' ') for line in data.lower().split('\n')] # ggf. NUM_TOKEN, [] entfernen
+        return [line.split(' ') for line in data.lower().split('\n') if len(line.split(' ')) <= self.max_length] # ggf. NUM_TOKEN, [] entfernen
     
     def prepareLanguageModels(self):
         for i in range(len(self)):
