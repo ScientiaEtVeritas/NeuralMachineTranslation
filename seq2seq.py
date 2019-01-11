@@ -6,7 +6,7 @@ import random
 from LanguageModel import LanguageTokens
 
 class seq2seq():
-    def __init__(self, input_size, hidden_size, output_size, device = None, learning_rate = 0.01, rnn_type = 'lstm', bidirectional = False, attention = False, max_length = 50, beam_width = 1, teacher_forcing_ratio = 0.5):
+    def __init__(self, input_size, hidden_size, output_size, device = None, learning_rate = 0.01, rnn_type = 'lstm', bidirectional = False, attention = 'global', max_length = 50, beam_width = 1, teacher_forcing_ratio = 0.5):
         self.device = device
         self.max_length = max_length
         self.beam_width = beam_width
@@ -184,9 +184,11 @@ class DecoderRNN(nn.Module):
 
         self.embedding = nn.Embedding(output_size, hidden_size)
         
-        if self.attention:
+        if self.attention == 'local':
             self.attention_weights_linear = nn.Linear(self.hidden_size * 2, self.max_length) # attention_weights_linear(embedded[0], hidden[0])
             self.attention_combine_linear = nn.Linear(self.hidden_size * 2, self.hidden_size)
+        elif self.attention == 'global':
+            self.attention_context_linear = nn.Linear(self.hidden_size * 2, self.hidden_size)
             
         self.dropout = nn.Dropout(self.dropout_p)
 
@@ -202,17 +204,28 @@ class DecoderRNN(nn.Module):
         output = self.embedding(input).view(1, 1, -1) # output: Tuple of Hidden State and Cell State
         output = self.dropout(output)
     
-        if self.attention:
+        if self.attention == 'local':
             if self.rnn_type == 'lstm':
                 attention_weights = F.softmax(self.attention_weights_linear(torch.cat((output[0], hidden[0][0]), 1)), dim = 1)
             elif self.rnn_type == 'gru':
                 attention_weights = F.softmax(self.attention_weights_linear(torch.cat((output[0], hidden[0]), 1)), dim = 1)
             attention_weighted_input = torch.bmm(attention_weights.unsqueeze(0), encoder_outputs.unsqueeze(0))
-            output = torch.cat((output[0], attention_weighted_input[0]), 1)
+            output = torch.cat((output[0], attention_weighted_input[0]), dim = 1)
             output = self.attention_combine_linear(output).unsqueeze(0)
         
         output = F.relu(output)
         output, hidden = self.rnn(output, hidden)
+                
+        if self.attention == 'global':
+            attention_weights = torch.empty(size=(encoder_outputs.size(0),))
+            for i, encoder_output in enumerate(encoder_outputs):
+                attention_weights[i] = torch.dot(output.squeeze(), encoder_output.squeeze())
+            
+            attention_context = torch.mm(attention_weights.reshape([1,-1]), encoder_outputs)
+            attention_context = torch.cat((attention_context.squeeze(), output.squeeze()))
+            output = torch.tanh(self.attention_context_linear(attention_context))
+            output = output.unsqueeze(0).unsqueeze(0)
+                        
         output = F.log_softmax(self.out(output[0]), dim = 1)
         
         if self.attention:
