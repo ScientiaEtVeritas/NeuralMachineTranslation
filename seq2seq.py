@@ -5,7 +5,7 @@ import torch.nn.functional as F
 import random
 from LanguageModel import LanguageTokens
 
-class model_config():
+class ModelConfig():
     def __init__(self, input_size, hidden_size, output_size, max_length = 50, rnn_type = 'lstm', bidirectional = False, attention = 'global', dropout_p = 0.1, num_layers_encoder=1, num_layers_decoder=1):
         self.input_size = input_size
         self.hidden_size = hidden_size
@@ -18,12 +18,12 @@ class model_config():
         self.num_layers_encoder = num_layers_encoder
         self.num_layers_decoder = num_layers_decoder
 
-class training_config():
+class TrainingConfig():
     def __init__(self, learning_rate = 0.01, teacher_forcing_ratio = 0.5):
         self.learning_rate = learning_rate
         self.teacher_forcing_ratio = teacher_forcing_ratio
 
-class prediction_config():
+class PredictionConfig():
     def __init__(self, beam_width = 1):
         self.beam_width = beam_width
 
@@ -113,7 +113,7 @@ class seq2seq():
             
             sequences = [(0.0, [torch.tensor([[LanguageTokens.SOS]], device=self.device)], [], decoder_hidden)]
             
-            for l in range(self.max_length):
+            for l in range(self.decoder.max_length):
                 beam_expansion = []
                 for apriori_log_prob, sentence, decoder_outputs, decoder_hidden in sequences:
                     decoder_input = sentence[-1]
@@ -153,7 +153,7 @@ class seq2seq():
         encoder_hidden = self.encoder.initEncoderHidden()
         
         if self.decoder.attention:
-            encoder_outputs = torch.zeros(self.max_length, self.encoder.hidden_size * (2 if self.encoder.bidirectional else 1), device=self.device)
+            encoder_outputs = torch.zeros(self.decoder.max_length, self.encoder.hidden_size * (2 if self.encoder.bidirectional else 1), device=self.device)
 
         for i in range(input_length):
             encoder_output, encoder_hidden = self.encoder(input_tensor[i], encoder_hidden)
@@ -202,15 +202,16 @@ class DecoderRNN(nn.Module):
         super(DecoderRNN, self).__init__()
         self.device = device
         if model_config:
-            self.encoder_bidirectional = model_config.encoder_bidirectional
-            self.hidden_size = hidden_size * (2 if self.encoder_bidirectional else 1)
+            self.bidirectional = model_config.bidirectional
+            self.hidden_size = model_config.hidden_size * (2 if self.bidirectional else 1)
             self.attention = model_config.attention
             self.rnn_type = model_config.rnn_type
+            self.max_length = model_config.max_length
 
             self.embedding = nn.Embedding(model_config.output_size, self.hidden_size)
             
             if self.attention == 'local':
-                self.attention_weights_linear = nn.Linear(self.hidden_size * 2, model_config.max_length) # attention_weights_linear(embedded[0], hidden[0])
+                self.attention_weights_linear = nn.Linear(self.hidden_size * 2, self.max_length) # attention_weights_linear(embedded[0], hidden[0])
 
             if self.attention:
                 self.attention_combine_linear = nn.Linear(self.hidden_size * 2, self.hidden_size)
@@ -261,8 +262,8 @@ class DecoderRNN(nn.Module):
         return torch.zeros(1, 1, self.hidden_size, device=self.device)
     
     def getDecoderHidden(self, encoder_hidden):
-        if self.encoder_bidirectional and self.rnn_type == 'lstm':
+        if self.bidirectional and self.rnn_type == 'lstm':
             return (encoder_hidden[0].reshape((1,1,self.hidden_size)), encoder_hidden[1].reshape((1,1,self.hidden_size)))
-        elif self.encoder_bidirectional and self.rnn_type == 'gru':
+        elif self.bidirectional and self.rnn_type == 'gru':
             return encoder_hidden.reshape((1,1,self.hidden_size))
         return encoder_hidden
