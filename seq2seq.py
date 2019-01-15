@@ -6,34 +6,62 @@ import random
 from LanguageModel import LanguageTokens
 
 class seq2seq():
-    def __init__(self, input_size, hidden_size, output_size, device = None, learning_rate = 0.01, rnn_type = 'lstm', bidirectional = False, attention = 'global', max_length = 50, beam_width = 1, teacher_forcing_ratio = 0.5):
-        self.device = device
-        self.max_length = max_length
-        self.beam_width = beam_width
-        self.attention = attention
-        self.teacher_forcing_ratio = teacher_forcing_ratio
-        self.encoder = EncoderRNN(input_size, hidden_size, rnn_type = rnn_type, bidirectional = bidirectional, device = device).to(device)
-        self.decoder = DecoderRNN(hidden_size, output_size, encoder_bidirectional=self.encoder.bidirectional, attention = attention, max_length = max_length, rnn_type = rnn_type, device = device).to(device)
-        self.encoder_optimizer = optim.SGD(self.encoder.parameters(), lr=learning_rate)
-        self.decoder_optimizer = optim.SGD(self.decoder.parameters(), lr=learning_rate)
-        self.criterion = nn.NLLLoss()
-        
-    def _forward_helper(self, input_tensor):
-        input_length = input_tensor.size(0)
-        
-        encoder_hidden = self.encoder.initEncoderHidden()
-        
-        if self.attention:
-            encoder_outputs = torch.zeros(self.max_length, self.encoder.hidden_size * (2 if self.encoder.bidirectional else 1), device=self.device)
+    class model_config():
+        def __init__(self, input_size, hidden_size, output_size, max_length = 50, rnn_type = 'lstm', bidirectional = False, attention = 'global', dropout_p = 0.1, num_layers_encoder=1, num_layers_decoder=1):
+            self.input_size = input_size
+            self.hidden_size = hidden_size
+            self.output_size = output_size
+            self.max_length = max_length
+            self.rnn_type = rnn_type
+            self.bidirectional = bidirectional
+            self.attention = attention
+            self.dropout_p = dropout_p
+            self.num_layers_encoder = num_layers_encoder
+            self.num_layers_decoder = num_layers_decoder
 
-        for i in range(input_length):
-            encoder_output, encoder_hidden = self.encoder(input_tensor[i], encoder_hidden)
-            if self.attention:
-                encoder_outputs[i] = encoder_output[0, 0]
-                
-        decoder_hidden = self.decoder.getDecoderHidden(encoder_hidden)
+    class training_config():
+        def __init__(self, learning_rate = 0.01, teacher_forcing_ratio = 0.5):
+            self.learning_rate = learning_rate
+            self.teacher_forcing_ratio = teacher_forcing_ratio
+
+    class prediction_config():
+        def __init__(self, beam_width = 1):
+            self.beam_width = beam_width
+
+    def __init__(self, model_config = None, training_config = None, prediction_config = None, state_dict = None, device = None):
+        self.encoder = EncoderRNN(model_config, device = device).to(device)
+        self.decoder = DecoderRNN(model_config, device = device).to(device)
         
-        return encoder_outputs, decoder_hidden
+        if not model_config:
+            assert(state_dict)
+            self.encoder.load_state_dict(state_dict['encoder'])
+            self.decoder.load_state_dict(state_dict['decoder'])
+
+        if training_config:         
+            self.teacher_forcing_ratio = training_config.teacher_forcing_ratio
+            self.encoder_optimizer = optim.SGD(self.encoder.parameters(), lr=training_config.learning_rate)
+            self.decoder_optimizer = optim.SGD(self.decoder.parameters(), lr=training_config.learning_rate)
+        else:
+            assert(state_dict)
+            self.teacher_forcing_ratio = state_dict['teacher_forcing_ratio']
+            self.encoder_optimizer = optim.SGD()
+            self.decoder_optimizer = optim.SGD()
+
+            self.encoder_optimizer.load_state_dict(state_dict['encoder_optimizer'])
+            self.decoder_optimizer.load_state_dict(state_dict['decoder_optimizer'])        
+        
+        self.criterion = nn.NLLLoss()
+
+        self.prediction_config = prediction_config
+        
+        self.device = device
+
+    def state_dict():
+        return {'encoder': self.encoder.state_dict(),
+                'decoder': self.decoder.state_dict(),
+                'encoder_optimizer': self.encoder_optimizer.state_dict(),
+                'decoder_optimizer': self.decoder_optimizer.state_dict(),
+                'teacher_forcing_ratio': self.teacher_forcing_ratio}
 
     def train(self, input_tensor, target_tensor):
         self.encoder_optimizer.zero_grad()
@@ -52,7 +80,7 @@ class seq2seq():
         output_sentence = []
 
         for i in range(target_length):
-            if self.attention:
+            if self.decoder.attention:
                 decoder_output, decoder_hidden, decoder_attention = self.decoder(
                     decoder_input, decoder_hidden, encoder_outputs)
             else:
@@ -76,17 +104,7 @@ class seq2seq():
         self.decoder_optimizer.step()
 
         return loss.item(), torch.Tensor([output_sentence])
-    
-    def evaluate(self, input_tensor, target_tensor):
-        with torch.no_grad():
-            target_length = target_tensor.size(0)
-            
-            sequence, decoder_outputs = self.predict(input_tensor = input_tensor)
-            
-            loss = sum([self.criterion(decoder_outputs[i], target_tensor[i]) for i in range(min(len(decoder_outputs),target_length))])
-
-            return loss.item(), torch.Tensor([sequence])
-                    
+                        
     def predict(self, input_tensor):
         with torch.no_grad():
             input_length = input_tensor.size()[0]
@@ -100,12 +118,12 @@ class seq2seq():
                 for apriori_log_prob, sentence, decoder_outputs, decoder_hidden in sequences:
                     decoder_input = sentence[-1]
                     if(decoder_input.item() != LanguageTokens.EOS):
-                        if self.attention:
+                        if self.decoder.attention:
                             decoder_output, decoder_hidden, _ = self.decoder(decoder_input, decoder_hidden,encoder_outputs)
                         else:
                             decoder_output, decoder_hidden = self.decoder(decoder_input, decoder_hidden)
 
-                        log_probabilities, indexes = decoder_output.data.topk(self.beam_width)
+                        log_probabilities, indexes = decoder_output.data.topk(self.prediction_config.beam_width)
                         
                         for i in range(len(log_probabilities)):
                             log_prob = log_probabilities[i]
@@ -115,26 +133,54 @@ class seq2seq():
                     else:
                         beam_expansion.append((apriori_log_prob, sentence, decoder_outputs, decoder_hidden))
 
-                sequences = sorted(beam_expansion, reverse=True, key = lambda x: x[0])[:self.beam_width]
+                sequences = sorted(beam_expansion, reverse=True, key = lambda x: x[0])[:self.prediction_config.beam_width]
                 
             return sequences[0][1], sequences[0][2] # 0 best sequence, 1 sentence, 2 decoder_outputs
+    
+    def evaluate(self, input_tensor, target_tensor):
+        with torch.no_grad():
+            target_length = target_tensor.size(0)
+            
+            sequence, decoder_outputs = self.predict(input_tensor = input_tensor)
+            
+            loss = sum([self.criterion(decoder_outputs[i], target_tensor[i]) for i in range(min(len(decoder_outputs),target_length))])
+
+            return loss.item(), torch.Tensor([sequence])
+
+    def _forward_helper(self, input_tensor):
+        input_length = input_tensor.size(0)
+        
+        encoder_hidden = self.encoder.initEncoderHidden()
+        
+        if self.decoder.attention:
+            encoder_outputs = torch.zeros(self.max_length, self.encoder.hidden_size * (2 if self.encoder.bidirectional else 1), device=self.device)
+
+        for i in range(input_length):
+            encoder_output, encoder_hidden = self.encoder(input_tensor[i], encoder_hidden)
+            if self.decoder.attention:
+                encoder_outputs[i] = encoder_output[0, 0]
+                
+        decoder_hidden = self.decoder.getDecoderHidden(encoder_hidden)
+        
+        return encoder_outputs, decoder_hidden
 
 class EncoderRNN(nn.Module):
     # input_size: Größe des Vokabulars (One-Hot-Encoding)
     # hidden_size: Größe des Embedding-Vektors (Ein- und Ausgabegröße der RNN-Einheit)
     # https://isaacchanghau.github.io/post/lstm-gru-formula/
-    def __init__(self, input_size, hidden_size, rnn_type = 'lstm', bidirectional = False, num_layers = 1, device = None):
+    def __init__(self, model_config = None, device = None):
         super(EncoderRNN, self).__init__()
         self.device = device
-        self.hidden_size = hidden_size
-        self.embedding = nn.Embedding(input_size, hidden_size)
-        self.bidirectional = bidirectional
-        self.rnn_type = rnn_type
-        
-        if rnn_type == 'lstm':
-            self.rnn = nn.LSTM(hidden_size, hidden_size, bidirectional = bidirectional, num_layers = num_layers)
-        elif rnn_type == 'gru':
-            self.rnn = nn.GRU(hidden_size, hidden_size, bidirectional = bidirectional, num_layers = num_layers)
+        if model_config:
+            self.hidden_size = model_config.hidden_size
+            self.embedding = nn.Embedding(model_config.input_size, model_config.hidden_size)
+            self.bidirectional = model_config.bidirectional
+            self.rnn_type = model_config.rnn_type
+            
+            if model_config.rnn_type == 'lstm':
+                self.rnn = nn.LSTM(self.hidden_size, self.hidden_size, bidirectional = self.bidirectional, num_layers = model_config.num_layers_encoder)
+            elif model_config.rnn_type == 'gru':
+                self.rnn = nn.GRU(self.hidden_size, self.hidden_size, bidirectional = self.bidirectional, num_layers = model_config.num_layers_encoder)
 
     def forward(self, input, hidden):
         embedded = self.embedding(input).view(1, 1, -1)
@@ -144,43 +190,38 @@ class EncoderRNN(nn.Module):
 
     def initHidden(self):
         return torch.zeros((2 if self.bidirectional else 1), 1, self.hidden_size, device=self.device)
-    
-    def initCellState(self):
-        return torch.zeros((2 if self.bidirectional else 1), 1, self.hidden_size, device=self.device)
-    
+        
     def initEncoderHidden(self):
         if self.rnn_type == 'lstm':
-            return (self.initHidden(), self.initCellState())
+            return (self.initHidden(), self.initHidden())
         elif self.rnn_type == 'gru':
             return self.initHidden()
         
 class DecoderRNN(nn.Module):
-    def __init__(self, hidden_size, output_size, rnn_type = 'lstm', encoder_bidirectional = False, attention = 'global', dropout_p=0.1, max_length=40, num_layers = 1, device = None):
+    def __init__(self, model_config = None, device = None):
         super(DecoderRNN, self).__init__()
         self.device = device
-        hidden_size = hidden_size * (2 if encoder_bidirectional else 1)
-        self.hidden_size = hidden_size
-        self.encoder_bidirectional = encoder_bidirectional
-        self.attention = attention
-        self.dropout_p = dropout_p
-        self.max_length = max_length
-        self.rnn_type = rnn_type
+        if model_config:
+            self.encoder_bidirectional = model_config.encoder_bidirectional
+            self.hidden_size = hidden_size * (2 if self.encoder_bidirectional else 1)
+            self.attention = model_config.attention
+            self.rnn_type = model_config.rnn_type
 
-        self.embedding = nn.Embedding(output_size, hidden_size)
-        
-        if self.attention == 'local':
-            self.attention_weights_linear = nn.Linear(self.hidden_size * 2, self.max_length) # attention_weights_linear(embedded[0], hidden[0])
-            self.attention_combine_linear = nn.Linear(self.hidden_size * 2, self.hidden_size)
-        elif self.attention == 'global':
-            self.attention_context_linear = nn.Linear(self.hidden_size * 2, self.hidden_size)
+            self.embedding = nn.Embedding(model_config.output_size, self.hidden_size)
             
-        self.dropout = nn.Dropout(self.dropout_p)
+            if self.attention == 'local':
+                self.attention_weights_linear = nn.Linear(self.hidden_size * 2, model_config.max_length) # attention_weights_linear(embedded[0], hidden[0])
 
-        if self.rnn_type == 'lstm':
-            self.rnn = nn.LSTM(hidden_size, hidden_size, num_layers = num_layers)
-        elif self.rnn_type == 'gru':
-            self.rnn = nn.GRU(hidden_size, hidden_size, num_layers = num_layers)
-        self.out = nn.Linear(hidden_size, output_size)
+            if self.attention:
+                self.attention_combine_linear = nn.Linear(self.hidden_size * 2, self.hidden_size)
+                
+            self.dropout = nn.Dropout(model_config.dropout_p)
+
+            if self.rnn_type == 'lstm':
+                self.rnn = nn.LSTM(self.hidden_size, self.hidden_size, num_layers = model_config.num_layers_decoder)
+            elif self.rnn_type == 'gru':
+                self.rnn = nn.GRU(self.hidden_size, self.hidden_size, num_layers = model_config.num_layers_decoder)
+            self.out = nn.Linear(self.hidden_size, model_config.output_size)
 
     def forward(self, input, hidden, encoder_outputs = None):
         # input: Decoder Output (Init: SOS, ...)
@@ -207,7 +248,7 @@ class DecoderRNN(nn.Module):
             
             attention_context = torch.mm(attention_weights.reshape([1,-1]), encoder_outputs)
             attention_context = torch.cat((attention_context.squeeze(), output.squeeze()))
-            output = torch.tanh(self.attention_context_linear(attention_context))
+            output = torch.tanh(self.attention_combine_linear(attention_context))
             output = output.unsqueeze(0).unsqueeze(0)
                         
         output = F.log_softmax(self.out(output[0]), dim = 1)
