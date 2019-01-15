@@ -17,13 +17,9 @@ class seq2seq():
         self.encoder_optimizer = optim.SGD(self.encoder.parameters(), lr=learning_rate)
         self.decoder_optimizer = optim.SGD(self.decoder.parameters(), lr=learning_rate)
         self.criterion = nn.NLLLoss()
-
-    def train(self, input_tensor, target_tensor):
-        self.encoder_optimizer.zero_grad()
-        self.decoder_optimizer.zero_grad()
-
+        
+    def _forward_helper(self, input_tensor):
         input_length = input_tensor.size(0)
-        target_length = target_tensor.size(0)
         
         encoder_hidden = self.encoder.initEncoderHidden()
         
@@ -34,10 +30,21 @@ class seq2seq():
             encoder_output, encoder_hidden = self.encoder(input_tensor[i], encoder_hidden)
             if self.attention:
                 encoder_outputs[i] = encoder_output[0, 0]
+                
+        decoder_hidden = self.decoder.getDecoderHidden(encoder_hidden)
+        
+        return encoder_outputs, decoder_hidden
+
+    def train(self, input_tensor, target_tensor):
+        self.encoder_optimizer.zero_grad()
+        self.decoder_optimizer.zero_grad()
+        
+        target_length = target_tensor.size(0)
+        
+        encoder_outputs, decoder_hidden = self._forward_helper(input_tensor)
             
         decoder_input = torch.tensor([[LanguageTokens.SOS]], device=self.device)
 
-        decoder_hidden = self.decoder.getDecoderHidden(encoder_hidden)
         loss = 0
 
         use_teacher_forcing = random.random() < self.teacher_forcing_ratio
@@ -72,22 +79,7 @@ class seq2seq():
     
     def evaluate(self, input_tensor, target_tensor):
         with torch.no_grad():
-            input_length = input_tensor.size(0)
             target_length = target_tensor.size(0)
-
-            encoder_hidden = self.encoder.initEncoderHidden()
-            
-            if self.attention:
-                encoder_outputs = torch.zeros(self.max_length, self.encoder.hidden_size * (2 if self.encoder.bidirectional else 1), device=self.device)
-
-            for i in range(input_length):
-                encoder_output, encoder_hidden = self.encoder(input_tensor[i], encoder_hidden)
-                if self.attention:
-                    encoder_outputs[i] = encoder_output[0, 0]
-
-            decoder_input = torch.tensor([[LanguageTokens.SOS]], device=self.device)
-
-            decoder_hidden = self.decoder.getDecoderHidden(encoder_hidden)
             
             sequence, decoder_outputs = self.predict(input_tensor = input_tensor)
             
@@ -98,18 +90,10 @@ class seq2seq():
     def predict(self, input_tensor):
         with torch.no_grad():
             input_length = input_tensor.size()[0]
-            encoder_hidden = self.encoder.initEncoderHidden()
 
-            if self.attention:
-                encoder_outputs = torch.zeros(self.max_length, self.encoder.hidden_size * (2 if self.encoder.bidirectional else 1), device=self.device)
-
-            for i in range(input_length):
-                encoder_output, encoder_hidden = self.encoder(input_tensor[i], encoder_hidden)
-                
-                if self.attention:
-                    encoder_outputs[i] = encoder_output[0, 0]
-
-            sequences = [(0.0, [torch.tensor([[LanguageTokens.SOS]], device=self.device)], [], self.decoder.getDecoderHidden(encoder_hidden))]
+            encoder_outputs, decoder_hidden = self._forward_helper(input_tensor)
+            
+            sequences = [(0.0, [torch.tensor([[LanguageTokens.SOS]], device=self.device)], [], decoder_hidden)]
             
             for l in range(self.max_length):
                 beam_expansion = []
@@ -171,7 +155,7 @@ class EncoderRNN(nn.Module):
             return self.initHidden()
         
 class DecoderRNN(nn.Module):
-    def __init__(self, hidden_size, output_size, rnn_type = 'lstm', encoder_bidirectional = False, attention = False, dropout_p=0.1, max_length=40, num_layers = 1, device = None):
+    def __init__(self, hidden_size, output_size, rnn_type = 'lstm', encoder_bidirectional = False, attention = 'global', dropout_p=0.1, max_length=40, num_layers = 1, device = None):
         super(DecoderRNN, self).__init__()
         self.device = device
         hidden_size = hidden_size * (2 if encoder_bidirectional else 1)
