@@ -6,7 +6,7 @@ import random
 from LanguageModel import LanguageTokens
 
 class ModelConfig():
-    def __init__(self, input_size, hidden_size, output_size, max_length = 50, rnn_type = 'lstm', bidirectional = False, attention = 'global', dropout_p = 0.1, num_layers_encoder=1, num_layers_decoder=1):
+    def __init__(self, input_size, hidden_size, output_size, max_length = 50, rnn_type = 'lstm', bidirectional = False, attention = 'global', dropout_p = 0.1, num_layers_encoder=1, num_layers_decoder=1, learning_rate = 0.01, teacher_forcing_ratio = 0.5, beam_width = 1):
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.output_size = output_size
@@ -17,51 +17,36 @@ class ModelConfig():
         self.dropout_p = dropout_p
         self.num_layers_encoder = num_layers_encoder
         self.num_layers_decoder = num_layers_decoder
-
-class TrainingConfig():
-    def __init__(self, learning_rate = 0.01, teacher_forcing_ratio = 0.5):
         self.learning_rate = learning_rate
         self.teacher_forcing_ratio = teacher_forcing_ratio
-
-class PredictionConfig():
-    def __init__(self, beam_width = 1):
         self.beam_width = beam_width
 
 class seq2seq():
-    def __init__(self, model_config = None, training_config = None, prediction_config = None, state_dict = None, device = None):
+    def __init__(self, model_config = None, state_dict = None, device = None):
         self.encoder = EncoderRNN(model_config, device = device).to(device)
         self.decoder = DecoderRNN(model_config, device = device).to(device)
         
-        if not model_config:
-            assert(state_dict)
+        if state_dict:
             self.encoder.load_state_dict(state_dict['encoder'])
             self.decoder.load_state_dict(state_dict['decoder'])
 
-        if training_config:         
-            self.teacher_forcing_ratio = training_config.teacher_forcing_ratio
-            self.encoder_optimizer = optim.SGD(self.encoder.parameters(), lr=training_config.learning_rate)
-            self.decoder_optimizer = optim.SGD(self.decoder.parameters(), lr=training_config.learning_rate)
-        else:
-            assert(state_dict)
-            self.teacher_forcing_ratio = state_dict['teacher_forcing_ratio']
-            self.encoder_optimizer = optim.SGD()
-            self.decoder_optimizer = optim.SGD()
+        self.teacher_forcing_ratio = model_config.teacher_forcing_ratio
+        self.encoder_optimizer = optim.SGD(self.encoder.parameters(), lr=model_config.learning_rate)
+        self.decoder_optimizer = optim.SGD(self.decoder.parameters(), lr=model_config.learning_rate)
 
+        if state_dict:
             self.encoder_optimizer.load_state_dict(state_dict['encoder_optimizer'])
             self.decoder_optimizer.load_state_dict(state_dict['decoder_optimizer'])        
         
         self.criterion = nn.NLLLoss()
-
-        self.prediction_config = prediction_config
-        
+        self.beam_width = model_config.beam_width
         self.device = device
 
-    def state_dict():
-        return {'encoder': self.encoder.state_dict(),
-                'decoder': self.decoder.state_dict(),
+    def state_dict(self):
+        return {'encoder': self.encoder.module.state_dict(),
+                'decoder': self.decoder.module.state_dict(),
                 'encoder_optimizer': self.encoder_optimizer.state_dict(),
-                'decoder_optimizer': self.decoder_optimizer.state_dict(),
-                'teacher_forcing_ratio': self.teacher_forcing_ratio}
+                'decoder_optimizer': self.decoder_optimizer.state_dict()}
 
     def train(self, input_tensor, target_tensor):
         self.encoder_optimizer.zero_grad()
@@ -123,7 +108,7 @@ class seq2seq():
                         else:
                             decoder_output, decoder_hidden = self.decoder(decoder_input, decoder_hidden)
 
-                        log_probabilities, indexes = decoder_output.data.topk(self.prediction_config.beam_width)
+                        log_probabilities, indexes = decoder_output.data.topk(self.beam_width)
                         
                         for i in range(len(log_probabilities)):
                             log_prob = log_probabilities[i]
@@ -133,7 +118,7 @@ class seq2seq():
                     else:
                         beam_expansion.append((apriori_log_prob, sentence, decoder_outputs, decoder_hidden))
 
-                sequences = sorted(beam_expansion, reverse=True, key = lambda x: x[0])[:self.prediction_config.beam_width]
+                sequences = sorted(beam_expansion, reverse=True, key = lambda x: x[0])[:self.beam_width]
                 
             return sequences[0][1], sequences[0][2] # 0 best sequence, 1 sentence, 2 decoder_outputs
     
@@ -168,20 +153,19 @@ class EncoderRNN(nn.Module):
     # input_size: Größe des Vokabulars (One-Hot-Encoding)
     # hidden_size: Größe des Embedding-Vektors (Ein- und Ausgabegröße der RNN-Einheit)
     # https://isaacchanghau.github.io/post/lstm-gru-formula/
-    def __init__(self, model_config = None, device = None):
+    def __init__(self, model_config, device = None):
         super(EncoderRNN, self).__init__()
         self.device = device
-        if model_config:
-            self.hidden_size = model_config.hidden_size
-            self.embedding = nn.Embedding(model_config.input_size, model_config.hidden_size)
-            self.bidirectional = model_config.bidirectional
-            self.rnn_type = model_config.rnn_type
+        self.hidden_size = model_config.hidden_size
+        self.embedding = nn.Embedding(model_config.input_size, model_config.hidden_size)
+        self.bidirectional = model_config.bidirectional
+        self.rnn_type = model_config.rnn_type
             
-            if model_config.rnn_type == 'lstm':
-                self.rnn = nn.LSTM(self.hidden_size, self.hidden_size, bidirectional = self.bidirectional, num_layers = model_config.num_layers_encoder)
-            elif model_config.rnn_type == 'gru':
-                self.rnn = nn.GRU(self.hidden_size, self.hidden_size, bidirectional = self.bidirectional, num_layers = model_config.num_layers_encoder)
-
+        if model_config.rnn_type == 'lstm':
+            self.rnn = nn.LSTM(self.hidden_size, self.hidden_size, bidirectional = self.bidirectional, num_layers = model_config.num_layers_encoder)
+        elif model_config.rnn_type == 'gru':
+            self.rnn = nn.GRU(self.hidden_size, self.hidden_size, bidirectional = self.bidirectional, num_layers = model_config.num_layers_encoder)
+            
     def forward(self, input, hidden):
         embedded = self.embedding(input).view(1, 1, -1)
         output = embedded
@@ -198,31 +182,31 @@ class EncoderRNN(nn.Module):
             return self.initHidden()
         
 class DecoderRNN(nn.Module):
-    def __init__(self, model_config = None, device = None):
+    def __init__(self, model_config, device = None):
         super(DecoderRNN, self).__init__()
         self.device = device
-        if model_config:
-            self.bidirectional = model_config.bidirectional
-            self.hidden_size = model_config.hidden_size * (2 if self.bidirectional else 1)
-            self.attention = model_config.attention
-            self.rnn_type = model_config.rnn_type
-            self.max_length = model_config.max_length
+        
+        self.bidirectional = model_config.bidirectional
+        self.hidden_size = model_config.hidden_size * (2 if self.bidirectional else 1)
+        self.attention = model_config.attention
+        self.rnn_type = model_config.rnn_type
+        self.max_length = model_config.max_length
 
-            self.embedding = nn.Embedding(model_config.output_size, self.hidden_size)
+        self.embedding = nn.Embedding(model_config.output_size, self.hidden_size)
             
-            if self.attention == 'local':
-                self.attention_weights_linear = nn.Linear(self.hidden_size * 2, self.max_length) # attention_weights_linear(embedded[0], hidden[0])
+        if self.attention == 'local':
+            self.attention_weights_linear = nn.Linear(self.hidden_size * 2, self.max_length) # attention_weights_linear(embedded[0], hidden[0])
 
-            if self.attention:
-                self.attention_combine_linear = nn.Linear(self.hidden_size * 2, self.hidden_size)
+        if self.attention:
+            self.attention_combine_linear = nn.Linear(self.hidden_size * 2, self.hidden_size)
                 
-            self.dropout = nn.Dropout(model_config.dropout_p)
+        self.dropout = nn.Dropout(model_config.dropout_p)
 
-            if self.rnn_type == 'lstm':
-                self.rnn = nn.LSTM(self.hidden_size, self.hidden_size, num_layers = model_config.num_layers_decoder)
-            elif self.rnn_type == 'gru':
-                self.rnn = nn.GRU(self.hidden_size, self.hidden_size, num_layers = model_config.num_layers_decoder)
-            self.out = nn.Linear(self.hidden_size, model_config.output_size)
+        if self.rnn_type == 'lstm':
+            self.rnn = nn.LSTM(self.hidden_size, self.hidden_size, num_layers = model_config.num_layers_decoder)
+        elif self.rnn_type == 'gru':
+            self.rnn = nn.GRU(self.hidden_size, self.hidden_size, num_layers = model_config.num_layers_decoder)
+        self.out = nn.Linear(self.hidden_size, model_config.output_size)
 
     def forward(self, input, hidden, encoder_outputs = None):
         # input: Decoder Output (Init: SOS, ...)
