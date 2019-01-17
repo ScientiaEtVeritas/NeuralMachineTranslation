@@ -96,21 +96,13 @@ class seq2seq():
 
             encoder_outputs, decoder_hidden = self._forward_helper(input_tensor)
             if self.decoder.attention:
-<<<<<<< HEAD
-                sequences = [(0.0, [torch.tensor([[LanguageTokens.SOS]], device=self.device)], [], decoder_hidden, None)]
-=======
                 sequences = [(0.0, [torch.tensor([[LanguageTokens.SOS]], device=self.device)], [], decoder_hidden, [])]
->>>>>>> 3e654cd20f03241c3c6e7fd7a63bc7b5bbb945ab
             else:
                 sequences = [(0.0, [torch.tensor([[LanguageTokens.SOS]], device=self.device)], [], decoder_hidden)]
             
             for l in range(self.decoder.max_length):
                 beam_expansion = []
-<<<<<<< HEAD
-                for apriori_log_prob, sentence, decoder_outputs, decoder_hidden, *rest in sequences:
-=======
                 for apriori_log_prob, sentence, decoder_outputs, decoder_hidden, *optionals in sequences:
->>>>>>> 3e654cd20f03241c3c6e7fd7a63bc7b5bbb945ab
                     decoder_input = sentence[-1]
                     if(decoder_input.item() != LanguageTokens.EOS):
                         if self.decoder.attention:
@@ -124,14 +116,10 @@ class seq2seq():
                             log_prob = log_probabilities[i]
                             index = indexes.squeeze()[i] # (1,)
                             index = index.view(1,-1) # (1,1)
-<<<<<<< HEAD
-                            beam_expansion.append((apriori_log_prob + log_prob, sentence + [index], decoder_outputs + [decoder_output], decoder_hidden, attention_weights))
-=======
                             if self.decoder.attention:
                                 beam_expansion.append((apriori_log_prob + log_prob, sentence + [index], decoder_outputs + [decoder_output], decoder_hidden, optionals[0] + [attention_weights]))
                             else:
                                 beam_expansion.append((apriori_log_prob + log_prob, sentence + [index], decoder_outputs + [decoder_output], decoder_hidden))
->>>>>>> 3e654cd20f03241c3c6e7fd7a63bc7b5bbb945ab
                     else:
                         beam_expansion.append((apriori_log_prob, sentence, decoder_outputs, decoder_hidden, *rest))
 
