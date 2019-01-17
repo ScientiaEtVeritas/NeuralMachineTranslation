@@ -71,11 +71,12 @@ class seq2seq():
     def predict(self, input_tensor):
         with torch.no_grad():
             encoder_outputs, decoder_hidden = self._forward_helper(input_tensor)
-            sequences = [(0.0, [self._emptySentenceTensor()], [], decoder_hidden, None)]
+
+            sequences = [(0.0, [self._emptySentenceTensor()], [], decoder_hidden, [])]
             
             for l in range(self.decoder.max_length):
                 beam_expansion = []
-                for apriori_log_prob, sentence, decoder_outputs, decoder_hidden, attention_weights in sequences:
+                for apriori_log_prob, sentence, decoder_outputs, decoder_hidden, *optionals in sequences:
                     decoder_input = sentence[-1]
                     if(decoder_input.item() != LanguageTokens.EOS):
                         decoder_output, decoder_hidden, attention_weights = self.decoder(decoder_input, decoder_hidden, encoder_outputs)
@@ -86,7 +87,8 @@ class seq2seq():
                             log_prob = log_probabilities[i]
                             index = indexes.squeeze()[i] # (1,)
                             index = index.view(1,-1) # (1,1)
-                            beam_expansion.append((apriori_log_prob + log_prob, sentence + [index], decoder_outputs + [decoder_output], decoder_hidden, attention_weights))
+                            
+                            beam_expansion.append((apriori_log_prob + log_prob, sentence + [index], decoder_outputs + [decoder_output], decoder_hidden, optionals[0] + [attention_weights]))
                     else:
                         beam_expansion.append((apriori_log_prob, sentence, decoder_outputs, decoder_hidden, attention_weights))
 
@@ -101,7 +103,7 @@ class seq2seq():
             
             sequence, decoder_outputs, _ = self.predict(input_tensor = input_tensor)
             
-            loss = sum([self.criterion(decoder_outputs[i], target_tensor[i]) for i in range(min(len(decoder_outputs),target_length))])
+            loss = sum([self.criterion(decoder_outputs[i], target_tensor[i]) for i in range(min(len(decoder_outputs), target_length))])
 
             return loss.item(), torch.Tensor([sequence])
 

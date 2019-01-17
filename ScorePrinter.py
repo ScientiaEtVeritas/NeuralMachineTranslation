@@ -20,5 +20,14 @@ class ScorePrinter:
     def startEpoch(self, epoch):
         print(f"\n\nEpoch {epoch} started")
               
-    def endEpoch(self, epoch):
+    def endEpoch(self, epoch):    
+        self.scores = {metric[0]:[] for metric in self.metrics}
+        self.count = 0
         print(f"\n\nEpoch {epoch} ended")
+              
+    def get_avg_score(self, all=False):
+        avg_scores = dict()
+        for (metric_name, _) in self.metrics:
+            avg_scores[metric_name] = sum(self.scores[metric_name][-self.count:]) / (self.count)
+        print(f"Self.count : {self.count}")
+        return avg_scores
