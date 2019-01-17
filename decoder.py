@@ -56,7 +56,9 @@ class DecoderRNN(nn.Module):
             attention_weights = torch.empty(size=(encoder_outputs.size(0),))
             for i, encoder_output in enumerate(encoder_outputs):
                 attention_weights[i] = torch.dot(output.squeeze(), encoder_output.squeeze())
-            
+                
+            #Confine attention_weight to [0,1]
+            attention_weights = F.softmax(attention_weights, dim=0)
             attention_context = torch.mm(attention_weights.reshape([1,-1]).to(self.device), encoder_outputs)
             attention_context = torch.cat((attention_context.squeeze(), output.squeeze()))
             output = torch.tanh(self.attention_combine_linear(attention_context))
