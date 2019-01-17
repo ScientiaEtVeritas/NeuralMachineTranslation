@@ -95,16 +95,18 @@ class seq2seq():
             input_length = input_tensor.size()[0]
 
             encoder_outputs, decoder_hidden = self._forward_helper(input_tensor)
-            
-            sequences = [(0.0, [torch.tensor([[LanguageTokens.SOS]], device=self.device)], [], decoder_hidden)]
+            if self.decoder.attention:
+                sequences = [(0.0, [torch.tensor([[LanguageTokens.SOS]], device=self.device)], [], decoder_hidden, None)]
+            else:
+                sequences = [(0.0, [torch.tensor([[LanguageTokens.SOS]], device=self.device)], [], decoder_hidden)]
             
             for l in range(self.decoder.max_length):
                 beam_expansion = []
-                for apriori_log_prob, sentence, decoder_outputs, decoder_hidden in sequences:
+                for apriori_log_prob, sentence, decoder_outputs, decoder_hidden, *rest in sequences:
                     decoder_input = sentence[-1]
                     if(decoder_input.item() != LanguageTokens.EOS):
                         if self.decoder.attention:
-                            decoder_output, decoder_hidden, _ = self.decoder(decoder_input, decoder_hidden,encoder_outputs)
+                            decoder_output, decoder_hidden, attention_weights = self.decoder(decoder_input, decoder_hidden,encoder_outputs)
                         else:
                             decoder_output, decoder_hidden = self.decoder(decoder_input, decoder_hidden)
 
@@ -114,19 +116,22 @@ class seq2seq():
                             log_prob = log_probabilities[i]
                             index = indexes.squeeze()[i] # (1,)
                             index = index.view(1,-1) # (1,1)
-                            beam_expansion.append((apriori_log_prob + log_prob, sentence + [index], decoder_outputs + [decoder_output], decoder_hidden))
+                            beam_expansion.append((apriori_log_prob + log_prob, sentence + [index], decoder_outputs + [decoder_output], decoder_hidden, attention_weights))
                     else:
-                        beam_expansion.append((apriori_log_prob, sentence, decoder_outputs, decoder_hidden))
+                        beam_expansion.append((apriori_log_prob, sentence, decoder_outputs, decoder_hidden, *rest))
 
                 sequences = sorted(beam_expansion, reverse=True, key = lambda x: x[0])[:self.beam_width]
-                
-            return sequences[0][1], sequences[0][2] # 0 best sequence, 1 sentence, 2 decoder_outputs
+            
+            if self.decoder.attention:
+                return sequences[0][1], sequences[0][2], sequences[0][4] # 0 best sequence, 1 sentence, 2 decoder_outputs, 
+            else:
+                return sequences[0][1], sequences[0][2] # 0 best sequence, 1 sentence, 2 decoder_outputs
     
     def evaluate(self, input_tensor, target_tensor):
         with torch.no_grad():
             target_length = target_tensor.size(0)
             
-            sequence, decoder_outputs = self.predict(input_tensor = input_tensor)
+            sequence, decoder_outputs, *rest = self.predict(input_tensor = input_tensor)
             
             loss = sum([self.criterion(decoder_outputs[i], target_tensor[i]) for i in range(min(len(decoder_outputs),target_length))])
 
@@ -231,7 +236,7 @@ class DecoderRNN(nn.Module):
             for i, encoder_output in enumerate(encoder_outputs):
                 attention_weights[i] = torch.dot(output.squeeze(), encoder_output.squeeze())
             
-            attention_context = torch.mm(attention_weights.reshape([1,-1]).to(device), encoder_outputs)
+            attention_context = torch.mm(attention_weights.reshape([1,-1]).to(self.device), encoder_outputs)
             attention_context = torch.cat((attention_context.squeeze(), output.squeeze()))
             output = torch.tanh(self.attention_combine_linear(attention_context))
             output = output.unsqueeze(0).unsqueeze(0)
