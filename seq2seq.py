@@ -114,7 +114,7 @@ class seq2seq():
 
         for i in range(input_length):
             encoder_output, _ = self.encoder(input_tensor[i], encoder_hidden)
-            encoder_outputs[i] = encoder_output.squeeze()
+            encoder_outputs[i] = encoder_output[0, 0]
                 
         decoder_hidden = self.decoder.getDecoderHidden(encoder_hidden)
         

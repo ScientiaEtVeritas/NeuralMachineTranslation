@@ -40,9 +40,11 @@ class DecoderRNN(nn.Module):
         
         if self.attention == 'local':
             if self.rnn_type == 'lstm':
-                attention_weights = F.softmax(self.attention_weights_linear(torch.cat((output[0], hidden[0][0]), 1)), dim = 1)
+                _hidden = hidden[0][0]
             elif self.rnn_type == 'gru':
-                attention_weights = F.softmax(self.attention_weights_linear(torch.cat((output[0], hidden[0]), 1)), dim = 1)
+                _hidden = hidden[0]
+                
+            attention_weights = F.softmax(self.attention_weights_linear(torch.cat((output[0], _hidden), 1)), dim = 1)
             attention_weighted_input = torch.bmm(attention_weights.unsqueeze(0), encoder_outputs.unsqueeze(0))
             output = torch.cat((output[0], attention_weighted_input[0]), dim = 1)
             output = self.attention_combine_linear(output).unsqueeze(0)
