@@ -15,7 +15,7 @@ class ScorePrinter:
         print(f" \n[{self.prefix}] {str(self.count) + ' examples /' if showCount else ''} ", end = ' ')
         for (metric_name, _) in self.metrics:
             avg_score = sum(self.scores[metric_name][-last:]) / last
-            print(f"{metric_name}: {avg_score}", end=' ')
+            print("{0}: {1:.2f}".format(metric_name, avg_score), end=' ')
             
     def startEpoch(self, epoch):
         print(f"\n\nEpoch {epoch} started")

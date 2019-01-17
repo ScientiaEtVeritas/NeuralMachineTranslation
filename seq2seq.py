@@ -92,8 +92,6 @@ class seq2seq():
                         
     def predict(self, input_tensor):
         with torch.no_grad():
-            input_length = input_tensor.size()[0]
-
             encoder_outputs, decoder_hidden = self._forward_helper(input_tensor)
             if self.decoder.attention:
                 sequences = [(0.0, [torch.tensor([[LanguageTokens.SOS]], device=self.device)], [], decoder_hidden, None)]
@@ -106,7 +104,7 @@ class seq2seq():
                     decoder_input = sentence[-1]
                     if(decoder_input.item() != LanguageTokens.EOS):
                         if self.decoder.attention:
-                            decoder_output, decoder_hidden, attention_weights = self.decoder(decoder_input, decoder_hidden,encoder_outputs)
+                            decoder_output, decoder_hidden, attention_weights = self.decoder(decoder_input, decoder_hidden, encoder_outputs)
                         else:
                             decoder_output, decoder_hidden = self.decoder(decoder_input, decoder_hidden)
 
