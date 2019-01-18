@@ -90,7 +90,7 @@ class seq2seq():
                             
                             beam_expansion.append((apriori_log_prob + log_prob, sentence + [index], decoder_outputs + [decoder_output], decoder_hidden, optionals[0] + [attention_weights]))
                     else:
-                        beam_expansion.append((apriori_log_prob, sentence, decoder_outputs, decoder_hidden, attention_weights))
+                        beam_expansion.append((apriori_log_prob, sentence, decoder_outputs, decoder_hidden, *optionals))
 
                 sequences = sorted(beam_expansion, reverse=True, key = lambda x: x[0])[:self.beam_width]
             
