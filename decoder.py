@@ -29,7 +29,7 @@ class DecoderRNN(nn.Module):
 
         self.out = nn.Linear(self.hidden_size, model_config.output_size)
 
-    def forward(self, input, hidden, encoder_outputs = None):
+    def forward(self, input, hidden, encoder_outputs = None, input_length=None):
         # input: Decoder Output (Init: SOS, ...)
         # Hidden: Tuple of Context Vector / Cell State of Decoder and Hidden State
         output = self.embedding(input).view(1, 1, -1) # output: Tuple of Hidden State and Cell State
@@ -52,17 +52,20 @@ class DecoderRNN(nn.Module):
         output = F.relu(output)
         output, hidden = self.rnn(output, hidden)
                 
-        if self.attention == 'global':
-            attention_weights = torch.empty(size=(encoder_outputs.size(0),))
-            for i, encoder_output in enumerate(encoder_outputs):
-                attention_weights[i] = torch.dot(output.squeeze(), encoder_output.squeeze())
-                
-            #Confine attention_weight to [0,1]
+        if self.attention == 'global':            
+            #Length of attention_weights = input_length
+            attention_weights = torch.zeros(input_length)
+            
+            for i in range(input_length):
+                attention_weights[i] = torch.dot(output.squeeze(), encoder_outputs[i].squeeze())                
+
             attention_weights = F.softmax(attention_weights, dim=0)
-            attention_context = torch.mm(attention_weights.reshape([1,-1]).to(self.device), encoder_outputs)
+            #Length of attention_weights = input_length
+            attention_context = torch.mm(attention_weights.reshape([1,-1]).to(self.device), encoder_outputs[0:input_length])
             attention_context = torch.cat((attention_context.squeeze(), output.squeeze()))
             output = torch.tanh(self.attention_combine_linear(attention_context))
             output = output.unsqueeze(0).unsqueeze(0)
+            
                         
         output = F.log_softmax(self.out(output[0]), dim = 1)
         

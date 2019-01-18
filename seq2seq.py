@@ -39,7 +39,7 @@ class seq2seq():
         self.encoder_optimizer.zero_grad()
         self.decoder_optimizer.zero_grad()
         
-        encoder_outputs, decoder_hidden = self._forward_helper(input_tensor)            
+        encoder_outputs, decoder_hidden, input_length = self._forward_helper(input_tensor)            
         
         decoder_input = self._emptySentenceTensor()
         loss = 0
@@ -47,7 +47,7 @@ class seq2seq():
         output_sentence = []
 
         for i in range(target_tensor.size(0)):
-            decoder_output, decoder_hidden, _ = self.decoder(decoder_input, decoder_hidden, encoder_outputs)
+            decoder_output, decoder_hidden, _ = self.decoder(decoder_input, decoder_hidden, encoder_outputs, input_length)
             _, topi = decoder_output.topk(1)
             output_sentence.append(topi.item())
 
@@ -70,7 +70,7 @@ class seq2seq():
                         
     def predict(self, input_tensor):
         with torch.no_grad():
-            encoder_outputs, decoder_hidden = self._forward_helper(input_tensor)
+            encoder_outputs, decoder_hidden, input_length = self._forward_helper(input_tensor)
 
             sequences = [(0.0, [self._emptySentenceTensor()], [], decoder_hidden, [])]
             
@@ -79,7 +79,7 @@ class seq2seq():
                 for apriori_log_prob, sentence, decoder_outputs, decoder_hidden, *optionals in sequences:
                     decoder_input = sentence[-1]
                     if(decoder_input.item() != LanguageTokens.EOS):
-                        decoder_output, decoder_hidden, attention_weights = self.decoder(decoder_input, decoder_hidden, encoder_outputs)
+                        decoder_output, decoder_hidden, attention_weights = self.decoder(decoder_input, decoder_hidden, encoder_outputs, input_length)
 
                         log_probabilities, indexes = decoder_output.data.topk(self.beam_width)
                         
@@ -120,7 +120,7 @@ class seq2seq():
                 
         decoder_hidden = self.decoder.getDecoderHidden(encoder_hidden)
         
-        return encoder_outputs, decoder_hidden
+        return encoder_outputs, decoder_hidden, input_length
 
     def _emptySentenceTensor(self):
         return torch.tensor([[LanguageTokens.SOS]], device=self.device)
