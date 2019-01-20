@@ -1,5 +1,6 @@
 from LanguageModel import LanguageTokens, LanguageModel
 import torch
+import os
 
 class DataLoader:
     def __init__(self, dataset, languages, max_length = 50, languageModels = None, device = None):
@@ -15,6 +16,7 @@ class DataLoader:
         self.device = device
     
     def loadFiles(self):
+        #list of (list of words being in the same line of the given file)
         self.data = (self._preprocess(self._loadFile(self.languages[0])),
                 self._preprocess(self._loadFile(self.languages[1])))
         
@@ -45,7 +47,12 @@ class DataLoader:
         return tuple(self._tensorFromSentence(self.languageModels[self.languages[i]], self.data[i][pos]) for i in (0,1))
         #input_tensor = self._tensorFromSentence(self.languageModels[self.languages[0]], self.data[0][pos])
         #target_tensor = self._tensorFromSentence(self.languageModels[self.languages[1]], self.data[1][pos])
-        #return (input_tensor, target_tensor)
-    
-    def sentenceFromTensor(self, language, tensor):
-        return [self.languageModels[language].index_token_map[int(word if isinstance(word, int) else word[0])] for word in tensor]
+        #return (input_tensor, target_tensor)    
+        
+    def sentenceFromTensor(self, real_target_tensor, estimated_target_tensor):
+        print(f"estimated targ tnesor : {estimated_target_tensor}, {estimated_target_tensor.size()} ")
+        real_target_sentence = " ".join([self.languageModels[self.languages[1]].index_token_map[int(word if isinstance(word, int) else word[0])] for word in real_target_tensor][:-1])
+        estimated_target_sequence = [self.languageModels[self.languages[1]].index_token_map[int(word.item())] for word in estimated_target_tensor[0]]
+        if estimated_target_sequence[-1] == LanguageTokens.EOS:
+            estimated_target_sequence.pop()
+        return real_target_sentence, " ".join(estimated_target_sequence[1:]) #First value is <SOS>
