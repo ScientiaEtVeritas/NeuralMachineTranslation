@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from model_config import ModelConfig
-import rnn_utils
 
 class DecoderRNN(nn.Module):
     def __init__(self, model_config, device = None):
@@ -25,7 +24,7 @@ class DecoderRNN(nn.Module):
                 
         self.dropout = nn.Dropout(model_config.dropout_p)
 
-        self.rnn = rnn_utils.initRNN(self.rnn_type, self.hidden_size, self.hidden_size, model_config.num_layers_decoder) 
+        self.rnn = nn.RNNBase(self.rnn_type, self.hidden_size, self.hidden_size, model_config.num_layers_decoder) 
 
         self.out = nn.Linear(self.hidden_size, model_config.output_size)
 
@@ -39,9 +38,9 @@ class DecoderRNN(nn.Module):
             attention_weights = None        
         
         if self.attention == 'local':
-            if self.rnn_type == 'lstm':
+            if self.rnn_type == 'LSTM':
                 _hidden = hidden[0][0]
-            elif self.rnn_type == 'gru':
+            elif self.rnn_type == 'GRU':
                 _hidden = hidden[0]
                 
             attention_weights = F.softmax(self.attention_weights_linear(torch.cat((output[0], _hidden), 1)), dim = 1)
@@ -72,8 +71,8 @@ class DecoderRNN(nn.Module):
         return torch.zeros(1, 1, self.hidden_size, device=self.device)
     
     def getDecoderHidden(self, encoder_hidden):
-        if self.bidirectional and self.rnn_type == 'lstm':
+        if self.bidirectional and self.rnn_type == 'LSTM':
             return (encoder_hidden[0].reshape((1,1,self.hidden_size)), encoder_hidden[1].reshape((1,1,self.hidden_size)))
-        elif self.bidirectional and self.rnn_type == 'gru':
+        elif self.bidirectional and self.rnn_type == 'GRU':
             return encoder_hidden.reshape((1,1,self.hidden_size))
         return encoder_hidden
