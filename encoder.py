@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 from model_config import ModelConfig
+import rnn_utils
 
 class EncoderRNN(nn.Module):
     # input_size: Größe des Vokabulars (One-Hot-Encoding)
@@ -14,7 +15,7 @@ class EncoderRNN(nn.Module):
         self.bidirectional = model_config.bidirectional
         self.rnn_type = model_config.rnn_type
         self.num_layers = model_config.num_layers_encoder
-        self.rnn = nn.RNNBase(model_config.rnn_type, self.hidden_size, self.hidden_size, self.num_layers, bidirectional=self.bidirectional)
+        self.rnn = rnn_utils.initRNN(model_config.rnn_type, self.hidden_size, self.hidden_size, self.num_layers, bidirectional=self.bidirectional)
         
     def forward(self, input, hidden):
         embedded = self.embedding(input)
@@ -24,7 +25,7 @@ class EncoderRNN(nn.Module):
         return torch.zeros((2 if self.bidirectional else 1) * self.num_layers, 1, self.hidden_size, device=self.device)
         
     def initEncoderHidden(self):
-        if self.rnn_type == 'LSTM':
+        if self.rnn_type == 'lstm':
             return (self.initHidden(), self.initHidden())
-        elif self.rnn_type == 'GRU':
+        elif self.rnn_type == 'gru':
             return self.initHidden()
