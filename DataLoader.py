@@ -49,10 +49,12 @@ class DataLoader:
         #target_tensor = self._tensorFromSentence(self.languageModels[self.languages[1]], self.data[1][pos])
         #return (input_tensor, target_tensor)    
         
-    def sentenceFromTensor(self, real_target_tensor, estimated_target_tensor):
-        print(f"estimated targ tnesor : {estimated_target_tensor}, {estimated_target_tensor.size()} ")
+    def real_estimated_sentence(self, real_target_tensor, estimated_target_tensor):
         real_target_sentence = " ".join([self.languageModels[self.languages[1]].index_token_map[int(word if isinstance(word, int) else word[0])] for word in real_target_tensor][:-1])
         estimated_target_sequence = [self.languageModels[self.languages[1]].index_token_map[int(word.item())] for word in estimated_target_tensor[0]]
         if estimated_target_sequence[-1] == LanguageTokens.EOS:
             estimated_target_sequence.pop()
         return real_target_sentence, " ".join(estimated_target_sequence[1:]) #First value is <SOS>
+    
+    def sentenceFromTensor(self, language, tensor):
+        return [self.languageModels[language].index_token_map[int(word if isinstance(word, int) else word[0])] for word in tensor]
