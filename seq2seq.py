@@ -109,14 +109,14 @@ class seq2seq():
 
     def _forward_helper(self, input_tensor):
         input_length = input_tensor.size(0)
-        
+
         encoder_hidden = self.encoder.initEncoderHidden()
-        
+
         encoder_outputs = torch.zeros(self.decoder.max_length, self.encoder.hidden_size * (2 if self.encoder.bidirectional else 1), device=self.device)
 
         for i in range(input_length):
-            encoder_output, _ = self.encoder(input_tensor[i], encoder_hidden)
-            encoder_outputs[i] = encoder_output[0, 0]
+            encoder_output, encoder_hidden = self.encoder(input_tensor[i].view(1,1), encoder_hidden)
+            encoder_outputs[i] = encoder_output.view(-1)
                 
         decoder_hidden = self.decoder.getDecoderHidden(encoder_hidden)
         
