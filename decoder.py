@@ -31,7 +31,7 @@ class DecoderRNN(nn.Module):
     def forward(self, input, hidden, encoder_outputs = None):
         # input: Decoder Output (Init: SOS, ...)
         # Hidden: Tuple of Context Vector / Cell State of Decoder and Hidden State
-        output = self.embedding(input) # output: Tuple of Hidden State and Cell State
+        output = self.embedding(input).view(1, 1, -1) # output: Tuple of Hidden State and Cell State
         output = self.dropout(output)
 
         if not self.attention:
