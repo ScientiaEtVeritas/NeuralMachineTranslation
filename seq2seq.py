@@ -75,9 +75,9 @@ class seq2seq():
 
             sequences = [(0.0, [self._emptySentenceTensor()], [], decoder_hidden, [])]
             
-            for l in range(self.decoder.max_length):
+            for _ in range(self.decoder.max_length):
                 beam_expansion = []
-                for apriori_log_prob, sentence, decoder_outputs, decoder_hidden, *optionals in sequences:
+                for apriori_log_prob, sentence, decoder_outputs, decoder_hidden, attention_weights_list in sequences:
                     decoder_input = sentence[-1]
                     if(decoder_input.item() != LanguageTokens.EOS):
                         decoder_output, decoder_hidden, attention_weights, last_context = self.decoder(decoder_input, decoder_hidden, encoder_outputs, input_length, last_context)
@@ -89,9 +89,9 @@ class seq2seq():
                             index = indexes.squeeze()[i] # (1,)
                             index = index.view(1,-1) # (1,1)
                             
-                            beam_expansion.append((apriori_log_prob + log_prob, sentence + [index], decoder_outputs + [decoder_output], decoder_hidden, optionals[0] + [attention_weights]))
+                            beam_expansion.append((apriori_log_prob + log_prob, sentence + [index], decoder_outputs + [decoder_output], decoder_hidden, attention_weights_list + [attention_weights]))
                     else:
-                        beam_expansion.append((apriori_log_prob, sentence, decoder_outputs, decoder_hidden, attention_weights))
+                        beam_expansion.append((apriori_log_prob, sentence, decoder_outputs, decoder_hidden, *optionals))
 
                 sequences = sorted(beam_expansion, reverse=True, key = lambda x: x[0])[:self.beam_width]
             
