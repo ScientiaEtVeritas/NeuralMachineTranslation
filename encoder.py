@@ -17,10 +17,8 @@ class EncoderRNN(nn.Module):
         self.rnn = rnn_utils.initRNN(model_config.rnn_type, self.hidden_size, self.hidden_size, model_config.num_layers_encoder, bidirectional=self.bidirectional)
         
     def forward(self, input, hidden):
-        embedded = self.embedding(input).view(1, 1, -1)
-        output = embedded
-        output, hidden = self.rnn(output, hidden)
-        return output, hidden
+        embedded = self.embedding(input)
+        return self.rnn(embedded, hidden)
 
     def initHidden(self):
         return torch.zeros((2 if self.bidirectional else 1), 1, self.hidden_size, device=self.device)
