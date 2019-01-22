@@ -6,7 +6,7 @@ import numpy as np
 def loss_metric(nll, target_length):
     return nll / target_length
 
-def perplexity(nll, target_length)):
+def perplexity(nll, target_length):
     return math.exp(loss_metric(nll, target_length))
 
 def bleu(real_target_sentence, estimated_target_sentence):
