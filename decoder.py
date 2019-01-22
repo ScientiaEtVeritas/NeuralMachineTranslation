@@ -30,7 +30,7 @@ class DecoderRNN(nn.Module):
 
         self.out = nn.Linear(self.hidden_size, model_config.output_size)
 
-    def forward(self, input, hidden, encoder_outputs = None, input_length=None, last_context = None):
+    def forward(self, input, hidden, encoder_outputs = None, last_context = None):
         # input: Decoder Output (Init: SOS, ...)
         # Hidden: Tuple of Context Vector / Cell State of Decoder and Hidden State
         output = self.embedding(input).view(1, 1, -1) # output: Tuple of Hidden State and Cell State
@@ -46,6 +46,7 @@ class DecoderRNN(nn.Module):
                 
         if self.attention == 'global' or self.attention == 'global_context':            
             #Length of attention_weights = input_length
+            input_length = encoder_outputs.size(0)
             attention_weights = torch.zeros(input_length)
             
             for i in range(input_length):
@@ -53,14 +54,13 @@ class DecoderRNN(nn.Module):
                     attention_weights[i] = torch.dot(output.squeeze(), encoder_outputs[i].squeeze())                
                 elif self.score == 'MLP':
                     output_score = self.attention_score_net(torch.cat((output.squeeze(), encoder_outputs[i].squeeze()), 0)) 
-                    output_score = torch.tanh(output_score)
-                    for_dims = torch.dot(self.attention_score_parameters, output_score)  
+                    output_score = torch.tanh(output_score) 
                     attention_weights[i] = torch.dot(self.attention_score_parameters, output_score)              
 
 
             attention_weights = F.softmax(attention_weights, dim=0)
             #Length of attention_weights = input_length
-            new_context = torch.mm(attention_weights.reshape([1,-1]).to(self.device), encoder_outputs[0:input_length])
+            new_context = torch.mm(attention_weights.reshape([1,-1]).to(self.device), encoder_outputs)
             attention_context = torch.cat((new_context.squeeze(), output.squeeze()))
             output = torch.tanh(self.attention_combine_linear(attention_context))
             output = output.unsqueeze(0).unsqueeze(0)

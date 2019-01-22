@@ -39,7 +39,7 @@ class seq2seq():
         self.encoder_optimizer.zero_grad()
         self.decoder_optimizer.zero_grad()
         
-        encoder_outputs, decoder_hidden, input_length, last_context = self._forward_helper(input_tensor)            
+        encoder_outputs, decoder_hidden, last_context = self._forward_helper(input_tensor)            
         
         decoder_input = self._emptySentenceTensor()
         loss = 0
@@ -47,7 +47,7 @@ class seq2seq():
         output_sentence = []
 
         for i in range(target_tensor.size(0)):
-            decoder_output, decoder_hidden, _, last_context = self.decoder(decoder_input, decoder_hidden, encoder_outputs, input_length, last_context)
+            decoder_output, decoder_hidden, _, last_context = self.decoder(decoder_input, decoder_hidden, encoder_outputs, last_context)
             _, topi = decoder_output.topk(1)
             output_sentence.append(topi.item())
 
@@ -71,7 +71,7 @@ class seq2seq():
     #Last element of the prediction might not be <EOS>? Should we check it in DataLoader -> sentenceFromTensor?
     def predict(self, input_tensor):
         with torch.no_grad():
-            encoder_outputs, decoder_hidden, input_length, last_context = self._forward_helper(input_tensor)
+            encoder_outputs, decoder_hidden, last_context = self._forward_helper(input_tensor)
 
             sequences = [(0.0, [self._emptySentenceTensor()], [], decoder_hidden, [])]
             
@@ -80,7 +80,7 @@ class seq2seq():
                 for apriori_log_prob, sentence, decoder_outputs, decoder_hidden, attention_weights_list in sequences:
                     decoder_input = sentence[-1]
                     if(decoder_input.item() != LanguageTokens.EOS):
-                        decoder_output, decoder_hidden, attention_weights, last_context = self.decoder(decoder_input, decoder_hidden, encoder_outputs, input_length, last_context)
+                        decoder_output, decoder_hidden, attention_weights, last_context = self.decoder(decoder_input, decoder_hidden, encoder_outputs, last_context)
 
                         log_probabilities, indexes = decoder_output.data.topk(self.beam_width)
                         
@@ -108,21 +108,16 @@ class seq2seq():
 
             return loss.item(), torch.Tensor([sequence])
 
-    def _forward_helper(self, input_tensor):
-        input_length = input_tensor.size(0)
-        
+    def _forward_helper(self, input_tensor):        
         encoder_hidden = self.encoder.initEncoderHidden()
         
-        encoder_outputs = torch.zeros(self.decoder.max_length, self.encoder.hidden_size * (2 if self.encoder.bidirectional else 1), device=self.device)
+        #encoder_outputs = torch.zeros(self.decoder.max_length, self.encoder.hidden_size * (2 if self.encoder.bidirectional else 1), device=self.device)
 
-        for i in range(input_length):
-            #Encoder_hidden has to be modified in each iteration
-            encoder_output, encoder_hidden = self.encoder(input_tensor[i], encoder_hidden)
-            encoder_outputs[i] = encoder_output[0, 0]
-                
+        encoder_outputs, encoder_hidden = self.encoder(input_tensor, encoder_hidden)             
         decoder_hidden = self.decoder.getDecoderHidden(encoder_hidden)
         last_context = self.decoder.initContext()
-        return encoder_outputs, decoder_hidden, input_length, last_context
+
+        return encoder_outputs, decoder_hidden, last_context
 
     def _emptySentenceTensor(self):
         return torch.tensor([[LanguageTokens.SOS]], device=self.device)
