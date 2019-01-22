@@ -46,8 +46,6 @@ class DecoderRNN(nn.Module):
         output = output.view(1,-1)
                 
         if self.attention == 'global' or self.attention == 'global_context': 
-            input_length = encoder_outputs.size(0)
-
             #Length of attention_weights = input_length
             input_length = encoder_outputs.size(0)
             attention_weights = torch.zeros(input_length)
@@ -71,9 +69,6 @@ class DecoderRNN(nn.Module):
             return output, hidden, attention_weights, new_context
             
         return output, hidden, attention_weights, None # attention_weights is None if attention not used
-
-    def initHidden(self):
-        return torch.zeros(1, 1, self.hidden_size, device=self.device)
     
     def getDecoderHidden(self, encoder_hidden):
         if self.bidirectional and self.rnn_type == 'lstm':
