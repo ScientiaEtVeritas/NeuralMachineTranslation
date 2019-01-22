@@ -49,6 +49,7 @@ class DecoderRNN(nn.Module):
             input_length = encoder_outputs.size(0)
 
             #Length of attention_weights = input_length
+            input_length = encoder_outputs.size(0)
             attention_weights = torch.zeros(input_length)
             
             if self.score == "dot":
