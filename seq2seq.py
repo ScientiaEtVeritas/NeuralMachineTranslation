@@ -111,11 +111,12 @@ class seq2seq():
     def _forward_helper(self, input_tensor):        
         encoder_hidden = self.encoder.initEncoderHidden()
       
-        encoder_outputs, encoder_hidden = self.encoder(input_tensor, encoder_hidden)             
-        decoder_hidden = self.decoder.getDecoderHidden(encoder_hidden)
+        encoder_outputs, encoder_hidden = self.encoder(input_tensor, encoder_hidden)  
+        encoder_outputs = encoder_outputs.view(-1, self.decoder.hidden_size) #remove batch dimension          
+        decoder_hidden = self.decoder.getHidden(encoder_hidden)
         last_context = self.decoder.initContext()
 
-        return encoder_outputs.view(-1, self.decoder.hidden_size), decoder_hidden, last_context
+        return encoder_outputs, decoder_hidden, last_context
 
     def _emptySentenceTensor(self):
         return torch.tensor([[LanguageTokens.SOS]], device=self.device)

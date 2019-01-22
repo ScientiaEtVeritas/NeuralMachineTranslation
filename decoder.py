@@ -15,6 +15,7 @@ class DecoderRNN(nn.Module):
         self.rnn_type = model_config.rnn_type
         self.max_length = model_config.max_length
         self.score = model_config.score
+        self.num_layers = model_config.num_layers_decoder
 
         self.embedding = nn.Embedding(model_config.output_size, self.hidden_size)
        
@@ -26,7 +27,7 @@ class DecoderRNN(nn.Module):
                 
         self.dropout = nn.Dropout(model_config.dropout_p)
         #Because of the concatenation after embedding, if global_context, then input_size of rnn will be 2 * hidden_size
-        self.rnn = rnn_utils.initRNN(self.rnn_type, self.hidden_size * (2 if self.attention =="global_context" else 1), self.hidden_size, model_config.num_layers_decoder) 
+        self.rnn = rnn_utils.initRNN(self.rnn_type, self.hidden_size * (2 if self.attention =="global_context" else 1), self.hidden_size, self.num_layers) 
 
         self.out = nn.Linear(self.hidden_size, model_config.output_size)
 
@@ -54,7 +55,7 @@ class DecoderRNN(nn.Module):
                 attention_weights = torch.mm(output, encoder_outputs.t())
                 
             elif self.score == "MLP":
-                output_score = self.attention_score_net(torch.cat((output.repeat(input_length,1), encoder_outputs), dim=1)) 
+                output_score = self.attention_score_net(torch.cat((output.repeat(input_length, 1), encoder_outputs), dim=1)) 
                 output_score = torch.tanh(output_score) 
                 attention_weights= torch.mm(self.attention_score_parameters, output_score.t())              
 
@@ -70,11 +71,12 @@ class DecoderRNN(nn.Module):
             
         return output, hidden, attention_weights, None # attention_weights is None if attention not used
     
-    def getDecoderHidden(self, encoder_hidden):
+    def getHidden(self, encoder_hidden):
+        hidden_shape = (self.num_layers, 1, self.hidden_size)
         if self.bidirectional and self.rnn_type == 'lstm':
-            return (encoder_hidden[0].reshape((1,1,self.hidden_size)), encoder_hidden[1].reshape((1,1,self.hidden_size)))
+            return (encoder_hidden[0].reshape(hidden_shape), encoder_hidden[1].reshape(hidden_shape))
         elif self.bidirectional and self.rnn_type == 'gru':
-            return encoder_hidden.reshape((1,1,self.hidden_size))
+            return encoder_hidden.reshape(hidden_shape)
         return encoder_hidden
     
     def initContext(self):
