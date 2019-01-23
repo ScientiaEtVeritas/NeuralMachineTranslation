@@ -1,15 +1,20 @@
 from enum import IntEnum
 
+
 class LanguageTokens(IntEnum):
     SOS = 0
     EOS = 1
     UNK = 2
 
+
 class LanguageModel:
     def __init__(self):
-        self.token_index_map = {} # word → index
-        self.token_count = {} 
-        self.index_token_map = {LanguageTokens.SOS: "SOS", LanguageTokens.EOS: "EOS", LanguageTokens.UNK: "UNK"} # index → word
+        self.token_index_map = {}  # word → index
+        self.token_count = {}
+        self.index_token_map = {
+            LanguageTokens.SOS: "SOS",
+            LanguageTokens.EOS: "EOS",
+            LanguageTokens.UNK: "UNK"}  # index → word
         self.n_tokens = 3  # Count SOS, EOS and UNK
 
     def addTokenList(self, tokens):
