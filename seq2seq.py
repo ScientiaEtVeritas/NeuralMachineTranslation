@@ -98,7 +98,7 @@ class seq2seq():
                         for i in range(len(log_probabilities)):
                             log_prob = log_probabilities[i]
                             index = indexes[i]
-                            
+
                             beam_expansion.append(
                                 (apriori_log_prob + log_prob,
                                  sentence + [index],
@@ -125,10 +125,9 @@ class seq2seq():
 
     def evaluate(self, input_tensor, target_tensor):
         with torch.no_grad():
+            sentence, decoder_outputs, _ = self.predict(input_tensor)
+            
             target_length = target_tensor.size(0)
-
-            sentence, decoder_outputs, _ = self.predict(
-                input_tensor=input_tensor)
 
             loss = sum([self.criterion(decoder_outputs[i], target_tensor[i])
                         for i in range(min(len(decoder_outputs), target_length))])
