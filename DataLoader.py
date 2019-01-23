@@ -24,8 +24,8 @@ class DataLoader:
         self.device = device
 
     def loadFiles(self):
-        # list of (list of words being in the same line of the given file)
-        self.data = self._preprocess(self._loadFile(self.languages[0]), self._loadFile(self.languages[1]))
+        # tuple of source sentences and target sentences
+        self.data = self._preprocess((self._loadFile(self.languages[0]), self._loadFile(self.languages[1])))
 
     def __len__(self):
         return len(self.data[0])
@@ -37,7 +37,7 @@ class DataLoader:
         def valid_sentence(sentence):
             return len(sentence.split(' ')) <= self.max_length
 
-        filtered = [(a, b) for a, b in data if valid_sentence(a) and valid_sentence(b)]
+        filtered = [(a.split(' '), b.split(' ')) for a, b in zip(*data) if valid_sentence(a) and valid_sentence(b)]
 
         filtered = zip(*filtered)
         return tuple([list(x) for x in filtered])
@@ -51,10 +51,9 @@ class DataLoader:
 
     def _indexesFromSentence(self, lm, tokens):
         return [lm.token_index_map[token]
-                if token in lm.token_index_map else LanguageTokens.UNK for token in tokens]  # TODO: <UNK>
+                if token in lm.token_index_map else LanguageTokens.UNK for token in tokens]
 
     def _tensorFromSentence(self, lm, tokens):
-        # indexes = [SOS_token]
         indexes = self._indexesFromSentence(lm, tokens)
         indexes.append(LanguageTokens.EOS)
         return torch.tensor(indexes, dtype=torch.long,
@@ -68,12 +67,8 @@ class DataLoader:
             self,
             real_target_tensor,
             estimated_target_tensor):
-        real_target_sentence = " ".join([self.languageModels[self.languages[1]].index_token_map[int(
-            word if isinstance(word, int) else word[0])] for word in real_target_tensor])
-        estimated_target_sequence = " ".join([self.languageModels[self.languages[1]].index_token_map[int(
-            word.item())] for word in estimated_target_tensor[0]][1:])
-        # if estimated_target_sequence[-1] == LanguageTokens.EOS:
-        #    estimated_target_sequence.pop()
+        real_target_sentence = " ".join(self.sentenceFromTensor(self.languages[1], real_target_tensor))
+        estimated_target_sequence = " ".join(self.sentenceFromTensor(self.languages[1], estimated_target_tensor.t())[1:])
         return real_target_sentence, estimated_target_sequence
 
     def sentenceFromTensor(self, language, tensor):
