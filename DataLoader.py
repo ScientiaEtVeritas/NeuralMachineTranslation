@@ -25,7 +25,7 @@ class DataLoader:
 
     def loadFiles(self):
         # list of (list of words being in the same line of the given file)
-        self.data = self._preprocess(self._loadFile(self.languages[0]), self._loadFile(self.languages[1]))
+        self.data = self._preprocess((self._loadFile(self.languages[0]), self._loadFile(self.languages[1])))
 
     def __len__(self):
         return len(self.data[0])
@@ -37,7 +37,7 @@ class DataLoader:
         def valid_sentence(sentence):
             return len(sentence.split(' ')) <= self.max_length
 
-        filtered = [(a, b) for a, b in data if valid_sentence(a) and valid_sentence(b)]
+        filtered = [(a, b) for a, b in zip(*data) if valid_sentence(a) and valid_sentence(b)]
 
         filtered = zip(*filtered)
         return tuple([list(x) for x in filtered])
