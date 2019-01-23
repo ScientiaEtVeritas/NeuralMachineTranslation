@@ -124,19 +124,19 @@ class seq2seq():
 
             # best sequence
             _, sentence, decoder_outputs, _, attention_weights = sequences[0]
-            return sentence, decoder_outputs, attention_weights
+            return torch.tensor(sentence), decoder_outputs, attention_weights
 
     def evaluate(self, input_tensor, target_tensor):
         with torch.no_grad():
             target_length = target_tensor.size(0)
 
-            sequence, decoder_outputs, _ = self.predict(
+            sentence, decoder_outputs, _ = self.predict(
                 input_tensor=input_tensor)
 
             loss = sum([self.criterion(decoder_outputs[i], target_tensor[i])
                         for i in range(min(len(decoder_outputs), target_length))])
 
-            return loss.item(), torch.Tensor([sequence])
+            return loss.item(), sentence
 
     def _forward_helper(self, input_tensor):
         encoder_hidden = self.encoder.initEncoderHidden()
