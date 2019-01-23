@@ -42,7 +42,8 @@ class ScorePrinter:
         last = last or self.count
         avg_scores = dict()
         for (metric_name, _) in self.metrics:
-            avg_score = sum(self.scores[metric_name][-last:]) / last
+            examples = self.scores[metric_name][-last:]
+            avg_score = sum(examples) / len(examples)
             if isinstance(avg_score, np.ndarray):
                 avg_scores[metric_name] = avg_score.tolist()
             else:
