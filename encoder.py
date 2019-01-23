@@ -4,9 +4,6 @@ import rnn_utils
 
 
 class EncoderRNN(nn.Module):
-    # input_size: Größe des Vokabulars (One-Hot-Encoding)
-    # hidden_size: Größe des Embedding-Vektors (Ein- und Ausgabegröße der RNN-Einheit)
-    # https://isaacchanghau.github.io/post/lstm-gru-formula/
     def __init__(self, model_config, device=None):
         super(EncoderRNN, self).__init__()
         self.device = device

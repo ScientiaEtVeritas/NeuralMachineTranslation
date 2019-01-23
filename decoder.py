@@ -23,7 +23,6 @@ class DecoderRNN(nn.Module):
 
         if self.attention:
             if self.score == 'MLP':
-                # attention_weights_linear(embedded[0], hidden[0])
                 self.attention_score_net = nn.Linear(
                     self.hidden_size * 2, self.hidden_size)
                 self.attention_score_parameters = nn.Parameter(
@@ -32,8 +31,6 @@ class DecoderRNN(nn.Module):
                 self.hidden_size * 2, self.hidden_size)
 
         self.dropout = nn.Dropout(model_config.dropout_p)
-        # Because of the concatenation after embedding, if global_context, then
-        # input_size of rnn will be 2 * hidden_size
         self.rnn = rnn_utils.initRNN(
             self.rnn_type,
             self.hidden_size * (
@@ -44,10 +41,6 @@ class DecoderRNN(nn.Module):
         self.out = nn.Linear(self.hidden_size, model_config.output_size)
 
     def forward(self, input, hidden, encoder_outputs=None, last_context=None):
-        # input: Decoder Output (Init: SOS, ...)
-        # Hidden: Tuple of Context Vector / Cell State of Decoder and Hidden
-        # State
-        # output: Tuple of Hidden State and Cell State
         output = self.embedding(input).view(1, -1)
         output = self.dropout(output)
 
@@ -62,7 +55,6 @@ class DecoderRNN(nn.Module):
         output = output.view(1, -1)
 
         if self.attention == 'global' or self.attention == 'global_context':
-            # Length of attention_weights = input_length
             input_length = encoder_outputs.size(0)
             attention_weights = torch.zeros(input_length)
 
@@ -77,7 +69,7 @@ class DecoderRNN(nn.Module):
                     self.attention_score_parameters, output_score.t())
 
             attention_weights = F.softmax(attention_weights, dim=1)
-            # Length of attention_weights = input_length
+            
             new_context = torch.mm(
                 attention_weights.to(
                     self.device), encoder_outputs)
