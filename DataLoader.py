@@ -68,7 +68,7 @@ class DataLoader:
             real_target_tensor,
             estimated_target_tensor):
         real_target_sentence = " ".join(self.sentenceFromTensor(self.languages[1], real_target_tensor))
-        estimated_target_sequence = " ".join(self.sentenceFromTensor(self.languages[1], estimated_target_tensor.t())[1:])
+        estimated_target_sequence = " ".join(self.sentenceFromTensor(self.languages[1], estimated_target_tensor)[1:])
         return real_target_sentence, estimated_target_sequence
 
     def sentenceFromTensor(self, language, tensor):

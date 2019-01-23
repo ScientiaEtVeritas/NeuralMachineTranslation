@@ -74,7 +74,7 @@ class seq2seq():
         self.encoder_optimizer.step()
         self.decoder_optimizer.step()
 
-        return loss.item(), torch.Tensor([output_sentence])
+        return loss.item(), torch.Tensor(output_sentence)
 
     # Last element of the prediction might not be <EOS>? Should we check it in
     # DataLoader -> sentenceFromTensor?
