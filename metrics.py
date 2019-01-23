@@ -23,6 +23,5 @@ def bleu(real_target_sentence, estimated_target_sentence, **kwargs):
     # extract five BLEU descriptors and return with a tensor to permit of
     # using the same sum, division, append operations which are defined with
     # the other metrics
-    print(f"value of BLEU : {value}")
     return np.array([float(x)
                      for x in re.findall(r"[0-9]+[.]?[0-9]*", value)[:5]])

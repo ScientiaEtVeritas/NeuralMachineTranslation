@@ -73,5 +73,4 @@ class DataLoader:
         return real_target_sentence, estimated_target_sequence
 
     def sentenceFromTensor(self, language, tensor):
-        return [self.languageModels[language].index_token_map[int(
-            word if isinstance(word, int) else word[0])] for word in tensor]
+        return [self.languageModels[language].index_token_map[int(word)] for word in tensor]
