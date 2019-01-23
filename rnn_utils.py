@@ -1,5 +1,6 @@
 import torch.nn as nn
 
+
 def initRNN(type, *args, **kwargs):
     if type == 'lstm':
         return nn.LSTM(*args, **kwargs)
