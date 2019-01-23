@@ -94,13 +94,13 @@ class seq2seq():
                         decoder_output, decoder_hidden, attention_weights, last_context = self.decoder(
                             decoder_input, decoder_hidden, encoder_outputs, last_context)
 
-                        log_probabilities, indexes = decoder_output.data.topk(
+                        log_probabilities, indexes = decoder_output.squeeze().data.topk(
                             self.beam_width)
 
                         for i in range(len(log_probabilities)):
                             log_prob = log_probabilities[i]
-                            index = indexes.squeeze()[i]  # (1,)
-                            index = index.view(1, -1)  # (1,1)
+                            index = indexes[i]  # (1,)
+                            # index = index.view(1, -1)  # (1,1)
 
                             beam_expansion.append(
                                 (apriori_log_prob + log_prob,
