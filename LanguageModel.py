@@ -29,3 +29,19 @@ class LanguageModel:
             self.n_tokens += 1
         else:
             self.token_count[token] += 1
+            
+    def filter_token(self, n):
+        tokens_to_delete = [token for token, count in self.token_count.items() if count <= n]
+        for token in tokens_to_delete:
+            idx = self.token_index_map[token]
+            del self.token_index_map[token]
+            del self.token_count[token]  
+            self.index_token_map[idx] = 'UNK'
+                
+        temp_map = {}
+        for idx in range(len(self.index_token_map)):
+            if self.index_token_map[idx] != 'UNK' or idx == LanguageTokens.UNK:
+                temp_map[len(temp_map)] = self.index_token_map[idx]
+        
+        self.index_token_map = temp_map
+        self.n_tokens = len(self.index_token_map)

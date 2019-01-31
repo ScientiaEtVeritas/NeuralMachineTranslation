@@ -48,6 +48,8 @@ class DataLoader:
                                 ].addTokenList(self.data[0][i])
             self.languageModels[self.languages[1]
                                 ].addTokenList(self.data[1][i])
+        
+        self.languageModels[self.languages[0]].filter_token(2)
 
     def _indexesFromSentence(self, lm, tokens):
         return [lm.token_index_map[token]
