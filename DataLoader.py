@@ -9,9 +9,11 @@ class DataLoader:
             languages,
             max_length=50,
             languageModels=None,
+            filter_token = 2,
             device=None):
         self.dataset = dataset
         self.languages = languages
+        self.filter_token = filter_token
         self.max_length = max_length
         self.loadFiles()
         if languageModels is not None:
@@ -21,6 +23,7 @@ class DataLoader:
                 self.languages[0]: LanguageModel(),
                 self.languages[1]: LanguageModel()}
             self.prepareLanguageModels()
+        self.filter_unk()
         self.device = device
 
     def loadFiles(self):
@@ -35,7 +38,7 @@ class DataLoader:
 
     def _preprocess(self, data):
         def valid_sentence(sentence):
-            return len(sentence.split(' ')) <= self.max_length
+            return len(sentence.split(' ')) <= self.max_length and sentence.count('.') < 2 and len(set(['-', ':', '"']) & set(sentence)) == 0 
 
         filtered = [(a.split(' '), b.split(' ')) for a, b in zip(*data) if valid_sentence(a) and valid_sentence(b)]
 
@@ -43,13 +46,16 @@ class DataLoader:
         return tuple([list(x) for x in filtered])
 
     def prepareLanguageModels(self):
-        for i in range(len(self)):
-            self.languageModels[self.languages[0]
-                                ].addTokenList(self.data[0][i])
-            self.languageModels[self.languages[1]
-                                ].addTokenList(self.data[1][i])
+        self.languageModels[self.languages[0]].addTokenList(self.data[0], self.filter_token)
+        self.languageModels[self.languages[1]].addTokenList(self.data[1], self.filter_token)
         
-        self.languageModels[self.languages[0]].filter_token(2)
+    def filter_unk(self):
+        def valid_sentence(lang, sentence):
+            return self._indexesFromSentence(self.languageModels[lang], sentence).count(LanguageTokens.UNK) < 2
+
+        filtered = [(a, b) for a, b in zip(*self.data) if valid_sentence(self.languages[0], a) and valid_sentence(self.languages[1], b)]
+        filtered = zip(*filtered)
+        self.data = tuple([list(x) for x in filtered])
 
     def _indexesFromSentence(self, lm, tokens):
         return [lm.token_index_map[token]

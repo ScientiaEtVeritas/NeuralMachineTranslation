@@ -7,6 +7,7 @@ class ModelConfig():
             max_length=50,
             rnn_type='lstm',
             bidirectional=False,
+            bidirectional_type = 'sum',
             attention='global',
             score='dot',
             dropout_p=0.1,
@@ -21,6 +22,7 @@ class ModelConfig():
         self.max_length = max_length
         self.rnn_type = rnn_type
         self.bidirectional = bidirectional
+        self.bidirectional_type = bidirectional_type
         self.attention = attention
         self.score = score
         self.dropout_p = dropout_p

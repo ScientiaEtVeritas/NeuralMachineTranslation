@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import rnn_utils
+import numpy as np
 
 
 class DecoderRNN(nn.Module):
@@ -10,8 +11,9 @@ class DecoderRNN(nn.Module):
         self.device = device
 
         self.bidirectional = model_config.bidirectional
+        self.bidirectional_type = model_config.bidirectional_type
         self.hidden_size = model_config.hidden_size * \
-            (2 if self.bidirectional else 1)
+            (2 if self.bidirectional and self.bidirectional_type == 'concat' else 1)
         self.attention = model_config.attention
         self.rnn_type = model_config.rnn_type
         self.max_length = model_config.max_length
@@ -87,12 +89,26 @@ class DecoderRNN(nn.Module):
     def getHidden(self, encoder_hidden):
         hidden_shape = (self.num_layers, 1, self.hidden_size)
         if self.bidirectional and self.rnn_type == 'lstm':
-            return (
-                encoder_hidden[0].reshape(hidden_shape),
-                encoder_hidden[1].reshape(hidden_shape))
+            if self.bidirectional_type == 'concat':
+                return (
+                    encoder_hidden[0].reshape(hidden_shape),
+                    encoder_hidden[1].reshape(hidden_shape))
+            elif self.bidirectional_type == 'sum':
+                return (
+                    (encoder_hidden[0][0] + self._flip(encoder_hidden[0][1],1)).reshape(hidden_shape),
+                    (encoder_hidden[1][0] + self._flip(encoder_hidden[1][1],1)).reshape(hidden_shape))
         elif self.bidirectional and self.rnn_type == 'gru':
-            return encoder_hidden.reshape(hidden_shape)
+            if self.bidirectional_type == 'concat': 
+                return encoder_hidden.reshape(hidden_shape)
+            elif self.bidirectional_type == 'sum':
+                return (encoder_hidden[0] + self._flip(encoder_hidden[1],1)).reshape(hidden_shape)
         return encoder_hidden
+    
+    def _flip(self, tensor, dim):
+        return tensor 
+        rNpArr = np.flip(tensor.data.numpy(),dim).copy()   #Reverse of copy of numpy array of given tensor
+        return torch.from_numpy(rNpArr)          
+
 
     def initContext(self):
         return torch.zeros(

@@ -7,6 +7,8 @@ import numpy as np
 def loss_metric(nll, target_length, **kwargs):
     return nll / target_length
 
+def nll_loss(nll, target_length, **kwargs):
+    return nll
 
 def perplexity(nll, target_length, **kwargs):
     return math.exp(loss_metric(nll, target_length))
