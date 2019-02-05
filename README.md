@@ -2,10 +2,11 @@
 ## Scope
 Standard attentional-based NMT framework (Bahdanau et al. 2014)
 - Data Preparer
-- (Bidirectional) LSTM-based encoder
+- (Bidirectional) GRU/LSTM-based encoder
 - Global Attention Layers: MLP/Dot Product (Luong et al. 2015)
-- LSTM-based decoder
+- GRU/LSTM-based decoder
 - Beam Search
+- Teacher Forcing
 
 ## Requirements
 - Data Preparation: Convert words to index prior to one-hot encoding for
