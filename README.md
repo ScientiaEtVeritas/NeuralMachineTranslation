@@ -2,10 +2,11 @@
 ## Scope
 Standard attentional-based NMT framework (Bahdanau et al. 2014)
 - Data Preparer
-- (Bidirectional) LSTM-based encoder
+- (Bidirectional) GRU/LSTM-based encoder
 - Global Attention Layers: MLP/Dot Product (Luong et al. 2015)
-- LSTM-based decoder
+- GRU/LSTM-based decoder
 - Beam Search
+- Teacher Forcing
 
 ## Requirements
 - Data Preparation: Convert words to index prior to one-hot encoding for
@@ -21,3 +22,7 @@ Perplexity and BLEU scores on validation/test sets.
 - Effective Approaches to Attention-based Neural Machine Translation (2015, Luong et al., https://arxiv.org/pdf/1508.04025.pdf)
 - Neural machine translation by jointly learning to align and translate (2014, Bahdanau et al., https://arxiv.org/pdf/1409.0473.pdf)
 - Neural Machine Translation and Sequence-to-sequence Models: A Tutorial (2017, Neubig, https://arxiv.org/pdf/1703.01619.pdf)
+
+## BLEU calculation
+We used for the BLEU calculation the multi_bleu.pl script from the moses project: 
+https://github.com/moses-smt/mosesdecoder/blob/master/scripts/generic/multi-bleu.perl
